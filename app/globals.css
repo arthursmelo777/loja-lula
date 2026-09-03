@@ -1,0 +1,89 @@
+@import "tailwindcss";
+
+:root {
+  --color-cream: #f3e9d8;
+  --color-cream-dark: #e9dcc4;
+  --color-black: #0a0a0a;
+  --color-black-soft: #171412;
+  --color-red: #c81e1e;
+  --color-red-dark: #8f1414;
+  --color-white: #ffffff;
+  --color-line: rgba(10, 10, 10, 0.12);
+
+  --font-display: "Anton";
+  --font-body: "Inter Variable";
+}
+
+@theme inline {
+  --color-cream: var(--color-cream);
+  --color-cream-dark: var(--color-cream-dark);
+  --color-ink: var(--color-black);
+  --color-ink-soft: var(--color-black-soft);
+  --color-brand-red: var(--color-red);
+  --color-brand-red-dark: var(--color-red-dark);
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+}
+
+* {
+  border-color: var(--color-line);
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-cream);
+  color: var(--color-black);
+  font-family: var(--font-body), Arial, sans-serif;
+}
+
+.font-display {
+  font-family: var(--font-display), Arial, sans-serif;
+  letter-spacing: -0.01em;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid var(--color-black);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+.hairline {
+  border-bottom: 1px solid var(--color-line);
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.input {
+  width: 100%;
+  border: 1px solid rgba(10, 10, 10, 0.3);
+  background: var(--color-white);
+  padding: 1rem 1rem;
+  font-size: 1rem;
+  transition: border-color 0.15s ease;
+}
+.input:focus {
+  border-color: var(--color-black);
+}
