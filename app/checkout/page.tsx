@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useCart } from "@/components/CartProvider";
@@ -49,6 +49,10 @@ export default function CheckoutPage() {
   const [couponCode, setCouponCode] = useState("");
   const [couponStatus, setCouponStatus] = useState<CouponStatus>("idle");
   const [couponDiscountPercent, setCouponDiscountPercent] = useState(0);
+  // Evita a corrida: limpar o carrinho após um pedido bem-sucedido deixa
+  // `items` vazio, o que faria o efeito abaixo mandar de volta pro carrinho
+  // em vez de seguir pra tela do PIX.
+  const orderPlacedRef = useRef(false);
 
   const discount =
     couponStatus === "valid" ? Math.round((subtotal * couponDiscountPercent) / 100) : 0;
@@ -76,7 +80,7 @@ export default function CheckoutPage() {
   }
 
   useEffect(() => {
-    if (items.length === 0) {
+    if (items.length === 0 && !orderPlacedRef.current) {
       router.replace("/carrinho");
     }
   }, [items, router]);
@@ -145,6 +149,7 @@ export default function CheckoutPage() {
         return;
       }
 
+      orderPlacedRef.current = true;
       clear();
       router.push(data.redirectUrl);
     } catch {
