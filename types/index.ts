@@ -17,12 +17,16 @@ export interface Product {
   images: ProductImage;
   sizes: ShirtSize[] | null; // null = tamanho único (bonés)
   tangible: true;
+  /** Se true, o cliente pode digitar um nome para ser impresso na peça. */
+  personalizable?: boolean;
 }
 
 export interface CartItem {
   productId: string;
   size: ShirtSize | null;
   quantity: number;
+  /** Nome digitado pelo cliente para personalizar a estampa (apenas produtos personalizáveis). */
+  customName?: string | null;
 }
 
 export type OrderStatus = "pending" | "paid" | "canceled" | "refunded";
@@ -33,6 +37,7 @@ export interface OrderItemRecord {
   product_id: string;
   product_name: string;
   variant: string | null;
+  custom_name: string | null;
   unit_price: number;
   quantity: number;
   total: number;
@@ -40,6 +45,7 @@ export interface OrderItemRecord {
 
 export interface OrderRecord {
   id: number;
+  review_token: string | null;
   transaction_hash: string | null;
   customer_name: string;
   customer_email: string;
@@ -83,4 +89,20 @@ export interface UtmData {
   utm_campaign: string;
   utm_term: string;
   utm_content: string;
+}
+
+export interface ReviewRecord {
+  id: number;
+  order_id: number;
+  product_id: string;
+  customer_name: string;
+  rating: number;
+  comment: string | null;
+  created_at: string;
+}
+
+export interface ProductRatingSummary {
+  productId: string;
+  average: number;
+  count: number;
 }

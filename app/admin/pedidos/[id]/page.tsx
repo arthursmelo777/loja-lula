@@ -98,6 +98,11 @@ export default function AdminOrderDetailPage({
               <span>
                 {item.product_name}
                 {item.variant ? ` — ${item.variant}` : ""} · {item.quantity}x
+                {item.custom_name && (
+                  <span className="block text-xs font-semibold text-brand-red">
+                    Estampar nome: &ldquo;{item.custom_name}&rdquo;
+                  </span>
+                )}
               </span>
               <span className="font-medium">{formatCents(item.total)}</span>
             </li>

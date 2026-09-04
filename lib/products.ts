@@ -22,6 +22,7 @@ export const PRODUCTS: Record<string, Product> = {
     },
     sizes: SHIRT_SIZES,
     tangible: true,
+    personalizable: true,
   },
   shirt_white: {
     id: "shirt_white",
@@ -37,6 +38,23 @@ export const PRODUCTS: Record<string, Product> = {
     },
     sizes: SHIRT_SIZES,
     tangible: true,
+    personalizable: true,
+  },
+  shirt_red: {
+    id: "shirt_red",
+    slug: "camiseta-lula-vermelha",
+    name: "Camiseta Lula Vermelha",
+    category: "camiseta",
+    price: 2990,
+    description:
+      "Camiseta oversized 100% algodão, estampa frente e costas. Frente com ilustração e a assinatura 'LULA'; costas com a frase 'Quem caminha com o povo nunca caminha só' e espaço para personalizar com o seu nome.",
+    images: {
+      front: "/products/shirt-red-front.jpg",
+      back: "/products/shirt-red-back.jpg",
+    },
+    sizes: SHIRT_SIZES,
+    tangible: true,
+    personalizable: true,
   },
   cap_black: {
     id: "cap_black",

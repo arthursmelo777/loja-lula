@@ -1,11 +1,22 @@
 import { z } from "zod";
 import { PRODUCTS, isValidSize } from "./products";
 
+// Nome de estampa: letras (com acentos), espaços, apóstrofo e hífen — sem limite de charset restritivo demais.
+const CUSTOM_NAME_PATTERN = /^[\p{L}\p{M}0-9 '\-.]+$/u;
+
 export const cartItemSchema = z
   .object({
     productId: z.string().min(1),
     size: z.enum(["P", "M", "G", "GG", "XGG"]).nullable(),
     quantity: z.number().int().min(1).max(10),
+    customName: z
+      .string()
+      .trim()
+      .max(30, "Nome muito longo (máx. 30 caracteres)")
+      .regex(CUSTOM_NAME_PATTERN, "Nome contém caracteres inválidos")
+      .nullable()
+      .optional()
+      .transform((v) => (v ? v : null)),
   })
   .superRefine((item, ctx) => {
     const product = PRODUCTS[item.productId];
@@ -22,6 +33,13 @@ export const cartItemSchema = z
         code: z.ZodIssueCode.custom,
         message: `Tamanho inválido para ${product.name}`,
         path: ["size"],
+      });
+    }
+    if (item.customName && !product.personalizable) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${product.name} não aceita personalização`,
+        path: ["customName"],
       });
     }
   });
@@ -72,6 +90,16 @@ export const checkoutRequestSchema = z.object({
 });
 
 export type CheckoutRequest = z.infer<typeof checkoutRequestSchema>;
+
+export const reviewRequestSchema = z.object({
+  orderId: z.number().int().positive(),
+  reviewToken: z.string().min(1),
+  productId: z.string().min(1),
+  rating: z.number().int().min(1).max(5),
+  comment: z.string().trim().max(500).optional().default(""),
+});
+
+export type ReviewRequest = z.infer<typeof reviewRequestSchema>;
 
 export function isValidCPF(cpf: string): boolean {
   const digits = cpf.replace(/\D/g, "");

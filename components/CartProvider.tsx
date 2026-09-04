@@ -16,9 +16,19 @@ const STORAGE_KEY = "lula_cart_v1";
 
 interface CartContextValue {
   items: CartItem[];
-  addItem: (productId: string, size: ShirtSize | null, quantity: number) => void;
-  removeItem: (productId: string, size: ShirtSize | null) => void;
-  setQuantity: (productId: string, size: ShirtSize | null, quantity: number) => void;
+  addItem: (
+    productId: string,
+    size: ShirtSize | null,
+    quantity: number,
+    customName?: string | null
+  ) => void;
+  removeItem: (productId: string, size: ShirtSize | null, customName?: string | null) => void;
+  setQuantity: (
+    productId: string,
+    size: ShirtSize | null,
+    quantity: number,
+    customName?: string | null
+  ) => void;
   clear: () => void;
   totalItems: number;
   subtotal: number;
@@ -29,8 +39,10 @@ interface CartContextValue {
 
 const CartContext = createContext<CartContextValue | null>(null);
 
-function sameLine(a: CartItem, productId: string, size: ShirtSize | null) {
-  return a.productId === productId && a.size === size;
+// Duas linhas só se combinam se o nome personalizado também for igual —
+// cada estampa com nome diferente precisa ficar separada no carrinho.
+function sameLine(a: CartItem, productId: string, size: ShirtSize | null, customName?: string | null) {
+  return a.productId === productId && a.size === size && (a.customName ?? null) === (customName ?? null);
 }
 
 export function CartProvider({ children }: { children: ReactNode }) {
@@ -58,30 +70,39 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
   }, [items, hydrated]);
 
-  const addItem = useCallback((productId: string, size: ShirtSize | null, quantity: number) => {
-    setItems((prev) => {
-      const existing = prev.find((i) => sameLine(i, productId, size));
-      if (existing) {
-        return prev.map((i) =>
-          sameLine(i, productId, size) ? { ...i, quantity: i.quantity + quantity } : i
-        );
-      }
-      return [...prev, { productId, size, quantity }];
-    });
-    setDrawerOpen(true);
-  }, []);
+  const addItem = useCallback(
+    (productId: string, size: ShirtSize | null, quantity: number, customName?: string | null) => {
+      setItems((prev) => {
+        const existing = prev.find((i) => sameLine(i, productId, size, customName));
+        if (existing) {
+          return prev.map((i) =>
+            sameLine(i, productId, size, customName) ? { ...i, quantity: i.quantity + quantity } : i
+          );
+        }
+        return [...prev, { productId, size, quantity, customName: customName ?? null }];
+      });
+      setDrawerOpen(true);
+    },
+    []
+  );
 
-  const removeItem = useCallback((productId: string, size: ShirtSize | null) => {
-    setItems((prev) => prev.filter((i) => !sameLine(i, productId, size)));
-  }, []);
+  const removeItem = useCallback(
+    (productId: string, size: ShirtSize | null, customName?: string | null) => {
+      setItems((prev) => prev.filter((i) => !sameLine(i, productId, size, customName)));
+    },
+    []
+  );
 
-  const setQuantity = useCallback((productId: string, size: ShirtSize | null, quantity: number) => {
-    setItems((prev) =>
-      prev
-        .map((i) => (sameLine(i, productId, size) ? { ...i, quantity } : i))
-        .filter((i) => i.quantity > 0)
-    );
-  }, []);
+  const setQuantity = useCallback(
+    (productId: string, size: ShirtSize | null, quantity: number, customName?: string | null) => {
+      setItems((prev) =>
+        prev
+          .map((i) => (sameLine(i, productId, size, customName) ? { ...i, quantity } : i))
+          .filter((i) => i.quantity > 0)
+      );
+    },
+    []
+  );
 
   const clear = useCallback(() => setItems([]), []);
 

@@ -5,6 +5,7 @@ export interface PricedItem {
   productId: string;
   productName: string;
   variant: string | null;
+  customName: string | null;
   unitPrice: number;
   quantity: number;
   total: number;
@@ -33,6 +34,7 @@ export function priceCart(items: CartItem[]): PricedCart {
       productId: product.id,
       productName: product.name,
       variant: item.size,
+      customName: item.customName ?? null,
       unitPrice,
       quantity: item.quantity,
       total,

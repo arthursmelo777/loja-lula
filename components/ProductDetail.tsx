@@ -14,6 +14,7 @@ export function ProductDetail({ product }: { product: Product }) {
   const [quantity, setQuantity] = useState(1);
   const [activeImage, setActiveImage] = useState<"front" | "back">("front");
   const [sizeError, setSizeError] = useState(false);
+  const [customName, setCustomName] = useState("");
 
   const images = useMemo(() => {
     const list: Array<{ key: "front" | "back"; src: string; label: string }> = [
@@ -36,14 +37,16 @@ export function ProductDetail({ product }: { product: Product }) {
     return true;
   }
 
+  const trimmedCustomName = customName.trim();
+
   function handleAddToCart() {
     if (!validateSize()) return;
-    addItem(product.id, size, quantity);
+    addItem(product.id, size, quantity, trimmedCustomName || null);
   }
 
   function handleBuyNow() {
     if (!validateSize()) return;
-    addItem(product.id, size, quantity);
+    addItem(product.id, size, quantity, trimmedCustomName || null);
     router.push("/carrinho");
   }
 
@@ -59,7 +62,8 @@ export function ProductDetail({ product }: { product: Product }) {
               fill
               sizes="(max-width: 768px) 100vw, 50vw"
               className="object-cover"
-              priority
+              quality={90}
+              preload
             />
           </div>
           {images.length > 1 && (
@@ -75,7 +79,7 @@ export function ProductDetail({ product }: { product: Product }) {
                   aria-label={`Ver ${img.label}`}
                   aria-pressed={activeImage === img.key}
                 >
-                  <Image src={img.src} alt={img.label} fill sizes="80px" className="object-cover" />
+                  <Image src={img.src} alt={img.label} fill sizes="80px" quality={90} className="object-cover" />
                 </button>
               ))}
             </div>
@@ -117,6 +121,28 @@ export function ProductDetail({ product }: { product: Product }) {
             </div>
           )}
 
+          {product.personalizable && (
+            <div className="mt-8">
+              <label htmlFor="custom-name" className="mb-2 flex items-baseline justify-between">
+                <span className="text-sm font-semibold">Personalize a estampa (opcional)</span>
+                <span className="text-xs text-ink/40">{trimmedCustomName.length}/30</span>
+              </label>
+              <input
+                id="custom-name"
+                type="text"
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value.slice(0, 30))}
+                placeholder="Seu nome para estampar nas costas"
+                maxLength={30}
+                className="input"
+              />
+              <p className="mt-2 text-xs text-ink/50">
+                Vai substituir &ldquo;[SEU NOME]&rdquo; na frase das costas. Deixe em branco para não
+                personalizar.
+              </p>
+            </div>
+          )}
+
           <div className="mt-8">
             <span className="mb-2 block text-sm font-semibold">Quantidade</span>
             <div className="flex w-fit items-center border border-ink">
@@ -140,7 +166,7 @@ export function ProductDetail({ product }: { product: Product }) {
             </div>
           </div>
 
-          <div className="fixed bottom-0 left-0 right-0 z-30 flex flex-col gap-3 border-t border-ink/10 bg-cream p-5 sm:static sm:flex-row sm:border-t-0 sm:bg-transparent sm:p-0 sm:mt-8">
+          <div className="fixed bottom-0 left-0 right-0 z-30 flex flex-col gap-3 border-t border-ink/10 bg-cream px-5 pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))] sm:static sm:flex-row sm:border-t-0 sm:bg-transparent sm:p-0 sm:mt-8">
             <button
               type="button"
               onClick={handleBuyNow}

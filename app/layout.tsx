@@ -7,11 +7,18 @@ import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
 import { CartDrawer } from "@/components/CartDrawer";
 import { UtmCapture } from "@/components/UtmCapture";
+import { ReviewToast } from "@/components/ReviewToast";
 
 export const metadata: Metadata = {
   title: "VesteLula — Camisetas e bonés exclusivos",
   description:
     "Camisetas e bonés exclusivos a partir de R$ 14,99. Pagamento via PIX com confirmação automática.",
+};
+
+export const viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover" as const,
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -24,6 +31,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <main className="flex-1">{children}</main>
           <Footer />
           <CartDrawer />
+          <ReviewToast />
         </CartProvider>
       </body>
     </html>

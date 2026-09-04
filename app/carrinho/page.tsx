@@ -35,13 +35,17 @@ export default function CarrinhoPage() {
             if (!product) return null;
             const lineTotal = product.price * item.quantity;
             return (
-              <li key={`${item.productId}-${item.size}`} className="flex gap-4 py-5 sm:gap-6">
+              <li
+                key={`${item.productId}-${item.size}-${item.customName ?? ""}`}
+                className="flex gap-4 py-5 sm:gap-6"
+              >
                 <div className="relative h-24 w-24 shrink-0 overflow-hidden bg-cream-dark sm:h-28 sm:w-28">
                   <Image
                     src={product.images.front}
                     alt={product.name}
                     fill
                     sizes="112px"
+                    quality={90}
                     className="object-cover"
                   />
                 </div>
@@ -50,6 +54,9 @@ export default function CarrinhoPage() {
                     <div>
                       <h2 className="font-semibold leading-tight">{product.name}</h2>
                       {item.size && <p className="mt-1 text-sm text-ink/60">Tamanho {item.size}</p>}
+                      {item.customName && (
+                        <p className="mt-1 text-sm text-ink/60">Estampa: &ldquo;{item.customName}&rdquo;</p>
+                      )}
                       <p className="mt-1 text-sm text-ink/60">
                         {formatCents(product.price)} / unidade
                       </p>
@@ -60,25 +67,29 @@ export default function CarrinhoPage() {
                     <div className="flex items-center border border-ink">
                       <button
                         type="button"
-                        className="h-9 w-9 text-sm"
+                        className="h-11 w-11 text-base sm:h-9 sm:w-9 sm:text-sm"
                         aria-label="Diminuir quantidade"
-                        onClick={() => setQuantity(item.productId, item.size, item.quantity - 1)}
+                        onClick={() =>
+                          setQuantity(item.productId, item.size, item.quantity - 1, item.customName)
+                        }
                       >
                         −
                       </button>
-                      <span className="w-9 text-center text-sm">{item.quantity}</span>
+                      <span className="w-11 text-center text-base sm:w-9 sm:text-sm">{item.quantity}</span>
                       <button
                         type="button"
-                        className="h-9 w-9 text-sm"
+                        className="h-11 w-11 text-base sm:h-9 sm:w-9 sm:text-sm"
                         aria-label="Aumentar quantidade"
-                        onClick={() => setQuantity(item.productId, item.size, item.quantity + 1)}
+                        onClick={() =>
+                          setQuantity(item.productId, item.size, item.quantity + 1, item.customName)
+                        }
                       >
                         +
                       </button>
                     </div>
                     <button
                       type="button"
-                      onClick={() => removeItem(item.productId, item.size)}
+                      onClick={() => removeItem(item.productId, item.size, item.customName)}
                       className="text-xs text-ink/50 underline underline-offset-2"
                     >
                       Remover

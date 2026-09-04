@@ -81,6 +81,7 @@ export async function POST(request: NextRequest) {
         productId: i.productId,
         productName: i.productName,
         variant: i.variant,
+        customName: i.customName,
         unitPrice: i.unitPrice,
         quantity: i.quantity,
         total: i.total,
@@ -115,15 +116,20 @@ export async function POST(request: NextRequest) {
         state: customer.state,
         zip_code: customer.zipCode,
       },
-      cart: priced.items.map((i) => ({
-        product_hash: getProductHash(i.category),
-        title: i.variant ? `${i.productName} - ${i.variant}` : i.productName,
-        cover: null,
-        price: i.unitPrice,
-        quantity: i.quantity,
-        operation_type: 1,
-        tangible: true,
-      })),
+      cart: priced.items.map((i) => {
+        const parts = [i.productName];
+        if (i.variant) parts.push(i.variant);
+        if (i.customName) parts.push(`Nome: ${i.customName}`);
+        return {
+          product_hash: getProductHash(i.category),
+          title: parts.join(" - "),
+          cover: null,
+          price: i.unitPrice,
+          quantity: i.quantity,
+          operation_type: 1,
+          tangible: true,
+        };
+      }),
       postbackUrl: `${siteUrl}/api/webhooks/invictuspay`,
       tracking,
     });

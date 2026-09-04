@@ -46,26 +46,32 @@ export function CartDrawer() {
                 const product = PRODUCTS[item.productId];
                 if (!product) return null;
                 return (
-                  <li key={`${item.productId}-${item.size}`} className="flex gap-4">
+                  <li key={`${item.productId}-${item.size}-${item.customName ?? ""}`} className="flex gap-4">
                     <div className="relative h-20 w-20 shrink-0 overflow-hidden bg-cream-dark">
                       <Image
                         src={product.images.front}
                         alt={product.name}
                         fill
                         sizes="80px"
+                        quality={90}
                         className="object-cover"
                       />
                     </div>
                     <div className="flex flex-1 flex-col gap-1">
                       <span className="text-sm font-semibold leading-tight">{product.name}</span>
                       {item.size && <span className="text-xs text-ink/60">Tamanho {item.size}</span>}
+                      {item.customName && (
+                        <span className="text-xs text-ink/60">Estampa: &ldquo;{item.customName}&rdquo;</span>
+                      )}
                       <div className="mt-2 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0">
                         <div className="flex items-center w-fit border border-ink">
                           <button
                             type="button"
                             className="h-10 w-10 sm:h-8 sm:w-8 text-base"
                             aria-label="Diminuir quantidade"
-                            onClick={() => setQuantity(item.productId, item.size, item.quantity - 1)}
+                            onClick={() =>
+                              setQuantity(item.productId, item.size, item.quantity - 1, item.customName)
+                            }
                           >
                             −
                           </button>
@@ -74,7 +80,9 @@ export function CartDrawer() {
                             type="button"
                             className="h-10 w-10 sm:h-8 sm:w-8 text-base"
                             aria-label="Aumentar quantidade"
-                            onClick={() => setQuantity(item.productId, item.size, item.quantity + 1)}
+                            onClick={() =>
+                              setQuantity(item.productId, item.size, item.quantity + 1, item.customName)
+                            }
                           >
                             +
                           </button>
@@ -85,7 +93,7 @@ export function CartDrawer() {
                       </div>
                       <button
                         type="button"
-                        onClick={() => removeItem(item.productId, item.size)}
+                        onClick={() => removeItem(item.productId, item.size, item.customName)}
                         className="mt-1 self-start text-xs text-ink/50 underline underline-offset-2"
                       >
                         Remover
@@ -98,7 +106,7 @@ export function CartDrawer() {
           )}
         </div>
 
-        <div className="hairline space-y-4 px-6 py-5">
+        <div className="hairline space-y-4 px-6 pt-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
           <div className="flex items-center justify-between font-display text-xl">
             <span>SUBTOTAL</span>
             <span>{formatCents(subtotal)}</span>

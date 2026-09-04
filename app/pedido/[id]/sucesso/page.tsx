@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getOrderById, getOrderItems } from "@/lib/db";
+import { getOrderById, getOrderItems, getReviewForOrderProduct } from "@/lib/db";
 import { formatCents } from "@/lib/format";
+import { ReviewForm } from "@/components/ReviewForm";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,21 @@ export default async function PedidoSucessoPage({
   if (!order) notFound();
 
   const items = await getOrderItems(order.id);
+
+  // Um formulário de avaliação por produto único do pedido (não por linha/tamanho).
+  const uniqueProducts = Array.from(
+    new Map(items.map((i) => [i.product_id, i.product_name])).entries()
+  );
+  const reviewables =
+    order.payment_status === "paid" && order.review_token
+      ? await Promise.all(
+          uniqueProducts.map(async ([productId, productName]) => ({
+            productId,
+            productName,
+            alreadyReviewed: Boolean(await getReviewForOrderProduct(order.id, productId)),
+          }))
+        )
+      : [];
 
   return (
     <div className="mx-auto max-w-2xl px-5 py-14 sm:px-8">
@@ -52,6 +68,9 @@ export default async function PedidoSucessoPage({
                 {item.product_name}
                 {item.variant ? ` — Tamanho ${item.variant}` : ""}
                 <span className="text-ink/50"> · {item.quantity}x</span>
+                {item.custom_name && (
+                  <span className="block text-xs text-ink/50">Estampa: &ldquo;{item.custom_name}&rdquo;</span>
+                )}
               </span>
               <span className="font-medium">{formatCents(item.total)}</span>
             </li>
@@ -76,6 +95,24 @@ export default async function PedidoSucessoPage({
         </p>
         <p className="text-ink/60">CEP {order.zip_code}</p>
       </div>
+
+      {reviewables.length > 0 && (
+        <div className="mt-8">
+          <h2 className="mb-3 font-display text-xl">O QUE VOCÊ ACHOU?</h2>
+          <div className="flex flex-col gap-4">
+            {reviewables.map((r) => (
+              <ReviewForm
+                key={r.productId}
+                orderId={order.id}
+                reviewToken={order.review_token as string}
+                productId={r.productId}
+                productName={r.productName}
+                alreadyReviewed={r.alreadyReviewed}
+              />
+            ))}
+          </div>
+        </div>
+      )}
 
       <Link
         href="/"

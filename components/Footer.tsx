@@ -24,7 +24,7 @@ export function Footer() {
           <div>
             <h3 className="mb-3 font-semibold uppercase tracking-wide text-cream/60">Pagamento</h3>
             <ul className="space-y-2 text-cream/80">
-              <li>PIX via InvictusPay</li>
+              <li>Pagamento via PIX</li>
               <li>Confirmação automática</li>
             </ul>
           </div>

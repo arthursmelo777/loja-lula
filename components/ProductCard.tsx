@@ -5,8 +5,14 @@ import Link from "next/link";
 import type { Product } from "@/types";
 import { formatCents } from "@/lib/format";
 import { useCart } from "./CartProvider";
+import { StarRatingDisplay } from "./StarRating";
 
-export function ProductCard({ product }: { product: Product }) {
+interface Props {
+  product: Product;
+  rating?: { average: number; count: number };
+}
+
+export function ProductCard({ product, rating }: Props) {
   const { addItem } = useCart();
   const needsSize = product.sizes !== null;
 
@@ -18,6 +24,7 @@ export function ProductCard({ product }: { product: Product }) {
           alt={product.name}
           fill
           sizes="(max-width: 640px) 50vw, 25vw"
+          quality={90}
           className="object-cover transition-transform duration-300 group-hover:scale-[1.03]"
         />
       </Link>
@@ -25,6 +32,12 @@ export function ProductCard({ product }: { product: Product }) {
         <div>
           <h3 className="font-display text-lg leading-tight">{product.name}</h3>
           <p className="mt-1 text-base font-semibold">{formatCents(product.price)}</p>
+          {rating && rating.count > 0 && (
+            <div className="mt-1 flex items-center gap-1.5">
+              <StarRatingDisplay value={rating.average} />
+              <span className="text-xs text-ink/50">({rating.count})</span>
+            </div>
+          )}
         </div>
         <div className="mt-auto flex flex-col sm:flex-row gap-2">
           <Link

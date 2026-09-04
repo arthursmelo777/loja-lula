@@ -1,12 +1,20 @@
 import Image from "next/image";
 import Link from "next/link";
 import { listProducts } from "@/lib/products";
+import { getAllRatingSummaries } from "@/lib/db";
 import { ProductCard } from "@/components/ProductCard";
 
-export default function Home() {
+// Revalida a cada 60s para as notas médias (badge de estrelas) não ficarem
+// congeladas no que existia no momento do build.
+export const revalidate = 60;
+
+export default async function Home() {
   const products = listProducts();
   const shirts = products.filter((p) => p.category === "camiseta");
   const caps = products.filter((p) => p.category === "bone");
+
+  const summaries = await getAllRatingSummaries();
+  const ratingByProduct = new Map(summaries.map((s) => [s.productId, s]));
 
   return (
     <div>
@@ -45,7 +53,8 @@ export default function Home() {
                 alt="Camiseta Lula Preta"
                 width={640}
                 height={640}
-                priority
+                quality={90}
+                preload
                 className="relative w-full border border-ink/10 object-cover shadow-[10px_10px_0_0_rgba(10,10,10,0.9)]"
               />
             </div>
@@ -61,7 +70,7 @@ export default function Home() {
         </div>
         <div className="grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-4">
           {shirts.map((product) => (
-            <ProductCard key={product.id} product={product} />
+            <ProductCard key={product.id} product={product} rating={ratingByProduct.get(product.id)} />
           ))}
         </div>
       </section>
@@ -74,7 +83,7 @@ export default function Home() {
         </div>
         <div className="grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-4">
           {caps.map((product) => (
-            <ProductCard key={product.id} product={product} />
+            <ProductCard key={product.id} product={product} rating={ratingByProduct.get(product.id)} />
           ))}
         </div>
       </section>

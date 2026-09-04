@@ -269,11 +269,17 @@ export default function CheckoutPage() {
               const product = PRODUCTS[item.productId];
               if (!product) return null;
               return (
-                <li key={`${item.productId}-${item.size}`} className="flex justify-between gap-2">
+                <li
+                  key={`${item.productId}-${item.size}-${item.customName ?? ""}`}
+                  className="flex justify-between gap-2"
+                >
                   <span>
                     {product.name}
                     {item.size ? ` — Tamanho ${item.size}` : ""}
                     <span className="text-ink/50"> · {item.quantity}x</span>
+                    {item.customName && (
+                      <span className="block text-xs text-ink/50">Estampa: &ldquo;{item.customName}&rdquo;</span>
+                    )}
                   </span>
                   <span className="shrink-0 font-medium">{formatCents(product.price * item.quantity)}</span>
                 </li>
