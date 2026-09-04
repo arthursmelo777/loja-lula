@@ -23,7 +23,14 @@ export async function GET(
     try {
       const raw = (await getInvictusTransaction(order.transaction_hash)) as Record<string, unknown>;
       const data = (raw?.data ?? raw) as Record<string, unknown>;
-      const rawStatus = typeof data?.status === "string" ? data.status : "pending";
+      // A InvictusPay devolve o status em `payment_status` (ex: "waiting_payment",
+      // "paid"), não em `status` — confirmado no payload real da API.
+      const rawStatus =
+        typeof data?.payment_status === "string"
+          ? data.payment_status
+          : typeof data?.status === "string"
+            ? data.status
+            : "pending";
       const status = normalizeStatus(rawStatus);
       if (status !== order.payment_status) {
         await updateOrderStatus(order.id, status);

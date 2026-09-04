@@ -3,10 +3,12 @@ import { getOrderByTransactionHash, updateOrderStatus } from "@/lib/db";
 import { normalizeStatus } from "@/lib/invictuspay";
 
 /**
- * A documentação fornecida não detalha o formato exato do payload do webhook,
- * então esta rota tenta reconhecer os campos mais comuns (hash/transaction_hash
- * e status em diferentes profundidades) sem inventar nomes que não existam.
- * Ajuste os caminhos abaixo assim que você receber um payload real da InvictusPay.
+ * Confirmado com um payload real de criação de transação (a InvictusPay não
+ * envolve a resposta em `data`/`transaction`, os campos ficam no nível raiz):
+ * `hash` para o id da transação e `payment_status` para o status
+ * (ex: "waiting_payment", "paid") — não `status`. Mantemos os fallbacks
+ * antigos por segurança, já que o formato do webhook em si ainda não foi
+ * confirmado (pode diferir da resposta de criação).
  */
 function extractHashAndStatus(body: Record<string, unknown>): { hash: string | null; status: string | null } {
   const data = (body.data ?? body) as Record<string, unknown>;
@@ -19,6 +21,9 @@ function extractHashAndStatus(body: Record<string, unknown>): { hash: string | n
     null;
 
   const status =
+    (transaction.payment_status as string | undefined) ??
+    (data.payment_status as string | undefined) ??
+    (body.payment_status as string | undefined) ??
     (transaction.status as string | undefined) ??
     (data.status as string | undefined) ??
     (body.status as string | undefined) ??

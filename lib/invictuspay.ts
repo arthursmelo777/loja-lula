@@ -126,14 +126,16 @@ export async function refundInvictusTransaction(hash: string, amount: number): P
 }
 
 /**
- * A documentação fornecida não mostra o JSON completo retornado na criação do PIX,
- * então esta função tenta reconhecer os nomes de campo mais comuns usados por
- * gateways de PIX (qr_code / qr_code_base64 / pix_qr_code / pix_code, etc.) e
- * cai em `raw` quando não reconhece nada — nunca inventa dados.
- *
- * IMPORTANTE: assim que você tiver uma resposta real da InvictusPay ao criar um
- * PIX, ajuste os caminhos abaixo (`pick(...)`) para bater exatamente com os
- * nomes de campo reais.
+ * Confirmado com uma resposta real de criação de transação PIX na InvictusPay.
+ * O objeto vem no nível raiz (sem envelope `data`). Campos confirmados:
+ *   hash: string                     — id da transação
+ *   payment_status: string           — ex. "waiting_payment", "paid"
+ *   pix.pix_qr_code: string          — código "copia e cola" (payload EMV)
+ *   pix.qr_code_base64: null         — a API NÃO devolve a imagem pronta;
+ *   pix.pix_url: null                  geramos o QR Code a partir do texto
+ *                                       acima em lib/pix-qrcode.ts.
+ * Mantemos os fallbacks para nomes alternativos por segurança (webhook e
+ * outras respostas podem variar), mas nunca inventamos um campo inexistente.
  */
 export function normalizeInvictusPixResponse(raw: unknown): NormalizedPixResult {
   const obj = (raw ?? {}) as Record<string, unknown>;
@@ -176,7 +178,9 @@ export function normalizeInvictusPixResponse(raw: unknown): NormalizedPixResult 
     (pick(["qr_code_text"]) as string | null) ??
     null;
 
-  const rawStatus = ((pick(["status"]) as string | null) ?? "pending").toLowerCase();
+  const rawStatus = (
+    (pick(["payment_status"]) as string | null) ?? (pick(["status"]) as string | null) ?? "pending"
+  ).toLowerCase();
   const status = normalizeStatus(rawStatus);
 
   return {
@@ -193,5 +197,7 @@ export function normalizeStatus(rawStatus: string): OrderStatus {
   if (["paid", "approved", "completed", "confirmed"].includes(s)) return "paid";
   if (["refused", "canceled", "cancelled", "chargeback", "expired"].includes(s)) return "canceled";
   if (["refunded", "reversed"].includes(s)) return "refunded";
+  // "waiting_payment" (valor real confirmado da InvictusPay) cai aqui, junto
+  // com qualquer outro status ainda não pago.
   return "pending";
 }
