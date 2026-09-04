@@ -108,6 +108,12 @@ export default function AdminOrderDetailPage({
             </li>
           ))}
         </ul>
+        {order.discount > 0 && (
+          <div className="mt-3 flex justify-between border-t border-ink/10 pt-3 text-sm text-ink/60">
+            <span>Cupom {order.coupon_code}</span>
+            <span>−{formatCents(order.discount)}</span>
+          </div>
+        )}
         <div className="mt-3 flex justify-between border-t border-ink/10 pt-3 font-display text-lg">
           <span>TOTAL</span>
           <span>{formatCents(order.total)}</span>

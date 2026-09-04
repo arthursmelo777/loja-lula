@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { checkoutRequestSchema, isValidCPF } from "@/lib/validators";
-import { priceCart } from "@/lib/pricing";
-import { createOrder, attachTransaction } from "@/lib/db";
+import { priceCart, applyDiscountPercent } from "@/lib/pricing";
+import { createOrder, attachTransaction, findValidCoupon, redeemCoupon } from "@/lib/db";
 import { createPixTransaction, normalizeInvictusPixResponse } from "@/lib/invictuspay";
 
 // Um product_hash por categoria, conforme fornecido pela InvictusPay.
@@ -40,7 +40,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { items, customer, tracking } = parsed.data;
+  const { items, customer, tracking, couponCode } = parsed.data;
 
   if (!isValidCPF(customer.document)) {
     return NextResponse.json({ error: "CPF inválido." }, { status: 400 });
@@ -58,6 +58,19 @@ export async function POST(request: NextRequest) {
 
   if (priced.total <= 0) {
     return NextResponse.json({ error: "Carrinho vazio." }, { status: 400 });
+  }
+
+  // Cupom de desconto (opcional): sempre validado e aplicado no servidor —
+  // o valor do desconto nunca vem do cliente.
+  if (couponCode) {
+    const coupon = await findValidCoupon(couponCode);
+    if (!coupon) {
+      return NextResponse.json(
+        { error: "Cupom inválido, expirado ou já utilizado." },
+        { status: 400 }
+      );
+    }
+    priced = applyDiscountPercent(priced, coupon.discount_percent);
   }
 
   // 1) Cria o pedido no banco com status "pending" antes de chamar o gateway.
@@ -87,6 +100,8 @@ export async function POST(request: NextRequest) {
         total: i.total,
       })),
       subtotal: priced.subtotal,
+      discount: priced.discount,
+      couponCode: couponCode,
       total: priced.total,
       utm: tracking,
     });
@@ -96,6 +111,16 @@ export async function POST(request: NextRequest) {
       { error: "Não foi possível criar o pedido. Tente novamente em instantes." },
       { status: 500 }
     );
+  }
+
+  // Resgata o cupom só depois do pedido criado (o vínculo used_order_id exige
+  // que o pedido já exista). Se perder uma corrida rara pra outro pedido
+  // simultâneo, seguimos mesmo assim — o pedido já foi criado com o desconto.
+  if (couponCode) {
+    const redeemed = await redeemCoupon(couponCode, order.id);
+    if (!redeemed) {
+      console.warn(`Cupom ${couponCode} não pôde ser resgatado para o pedido ${order.id}.`);
+    }
   }
 
   // 2) Chama a InvictusPay para gerar a cobrança PIX.

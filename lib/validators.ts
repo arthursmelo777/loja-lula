@@ -79,6 +79,13 @@ export const utmSchema = z.object({
 export const checkoutRequestSchema = z.object({
   items: cartSchema,
   customer: checkoutCustomerSchema,
+  couponCode: z
+    .string()
+    .trim()
+    .max(30)
+    .nullable()
+    .optional()
+    .transform((v) => (v ? v : null)),
   tracking: utmSchema.optional().default({
     src: "",
     utm_source: "",

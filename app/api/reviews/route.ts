@@ -1,6 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { reviewRequestSchema } from "@/lib/validators";
-import { getOrderById, getOrderItems, getReviewForOrderProduct, createReview } from "@/lib/db";
+import {
+  getOrderById,
+  getOrderItems,
+  getReviewForOrderProduct,
+  createReview,
+  getOrCreateCouponForOrder,
+} from "@/lib/db";
 import { formatReviewerName } from "@/lib/format";
 
 export async function POST(request: NextRequest) {
@@ -57,5 +63,12 @@ export async function POST(request: NextRequest) {
     comment: comment ? comment : null,
   });
 
-  return NextResponse.json({ review });
+  // Recompensa por avaliar: cupom de desconto pra próxima compra (um por pedido,
+  // não por avaliação — comprar 2 itens e avaliar os 2 não dobra o cupom).
+  const coupon = await getOrCreateCouponForOrder(order.id);
+
+  return NextResponse.json({
+    review,
+    coupon: { code: coupon.code, discountPercent: coupon.discount_percent },
+  });
 }

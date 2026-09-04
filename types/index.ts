@@ -59,6 +59,8 @@ export interface OrderRecord {
   state: string;
   zip_code: string;
   subtotal: number;
+  discount: number;
+  coupon_code: string | null;
   total: number;
   payment_method: string;
   payment_status: OrderStatus;
@@ -105,4 +107,15 @@ export interface ProductRatingSummary {
   productId: string;
   average: number;
   count: number;
+}
+
+export interface CouponRecord {
+  id: number;
+  code: string;
+  discount_percent: number;
+  source_order_id: number;
+  used_order_id: number | null;
+  used_at: string | null;
+  created_at: string;
+  expires_at: string | null;
 }

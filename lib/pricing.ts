@@ -15,6 +15,7 @@ export interface PricedItem {
 export interface PricedCart {
   items: PricedItem[];
   subtotal: number;
+  discount: number;
   total: number;
 }
 
@@ -44,5 +45,11 @@ export function priceCart(items: CartItem[]): PricedCart {
 
   const subtotal = priced.reduce((sum, i) => sum + i.total, 0);
 
-  return { items: priced, subtotal, total: subtotal };
+  return { items: priced, subtotal, discount: 0, total: subtotal };
+}
+
+/** Aplica um desconto percentual (sempre calculado no servidor) sobre um carrinho já precificado. */
+export function applyDiscountPercent(cart: PricedCart, percent: number): PricedCart {
+  const discount = Math.round((cart.subtotal * percent) / 100);
+  return { ...cart, discount, total: Math.max(cart.subtotal - discount, 0) };
 }

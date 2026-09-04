@@ -1,6 +1,11 @@
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { getOrderById, getOrderItems, getReviewForOrderProduct } from "@/lib/db";
+import {
+  getOrderById,
+  getOrderItems,
+  getReviewForOrderProduct,
+  getOrCreateCouponForOrder,
+} from "@/lib/db";
 import { formatCents } from "@/lib/format";
 import { ReviewForm } from "@/components/ReviewForm";
 
@@ -34,6 +39,15 @@ export default async function PedidoSucessoPage({
           }))
         )
       : [];
+
+  // Se pelo menos um item já foi avaliado, o pedido já ganhou seu cupom —
+  // recuperamos ele pra continuar mostrando mesmo depois de recarregar a página.
+  const existingCoupon = reviewables.some((r) => r.alreadyReviewed)
+    ? await getOrCreateCouponForOrder(order.id).then((c) => ({
+        code: c.code,
+        discountPercent: c.discount_percent,
+      }))
+    : null;
 
   return (
     <div className="mx-auto max-w-2xl px-5 py-14 sm:px-8">
@@ -77,6 +91,18 @@ export default async function PedidoSucessoPage({
           ))}
         </ul>
 
+        {order.discount > 0 && (
+          <div className="flex flex-col gap-1 pt-4 text-sm text-ink/60">
+            <div className="flex justify-between">
+              <span>Subtotal</span>
+              <span>{formatCents(order.subtotal)}</span>
+            </div>
+            <div className="flex justify-between text-brand-red">
+              <span>Cupom {order.coupon_code}</span>
+              <span>−{formatCents(order.discount)}</span>
+            </div>
+          </div>
+        )}
         <div className="flex items-center justify-between pt-4 font-display text-xl">
           <span>TOTAL</span>
           <span>{formatCents(order.total)}</span>
@@ -108,6 +134,7 @@ export default async function PedidoSucessoPage({
                 productId={r.productId}
                 productName={r.productName}
                 alreadyReviewed={r.alreadyReviewed}
+                existingCoupon={r.alreadyReviewed ? existingCoupon : null}
               />
             ))}
           </div>

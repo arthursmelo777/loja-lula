@@ -37,6 +37,8 @@ const INITIAL_STATE: FormState = {
   state: "",
 };
 
+type CouponStatus = "idle" | "checking" | "valid" | "invalid";
+
 export default function CheckoutPage() {
   const { items, subtotal, clear } = useCart();
   const router = useRouter();
@@ -44,6 +46,34 @@ export default function CheckoutPage() {
   const [cepLoading, setCepLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [couponCode, setCouponCode] = useState("");
+  const [couponStatus, setCouponStatus] = useState<CouponStatus>("idle");
+  const [couponDiscountPercent, setCouponDiscountPercent] = useState(0);
+
+  const discount =
+    couponStatus === "valid" ? Math.round((subtotal * couponDiscountPercent) / 100) : 0;
+  const total = subtotal - discount;
+
+  async function handleCouponBlur() {
+    const code = couponCode.trim();
+    if (!code) {
+      setCouponStatus("idle");
+      return;
+    }
+    setCouponStatus("checking");
+    try {
+      const res = await fetch(`/api/coupons/${encodeURIComponent(code)}`, { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setCouponDiscountPercent(data.discountPercent);
+        setCouponStatus("valid");
+      } else {
+        setCouponStatus("invalid");
+      }
+    } catch {
+      setCouponStatus("invalid");
+    }
+  }
 
   useEffect(() => {
     if (items.length === 0) {
@@ -102,6 +132,7 @@ export default function CheckoutPage() {
             city: form.city,
             state: form.state,
           },
+          couponCode: couponStatus === "valid" ? couponCode.trim() : null,
           tracking: getStoredUtm(),
         }),
       });
@@ -247,6 +278,33 @@ export default function CheckoutPage() {
             </div>
           </fieldset>
 
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-1 font-display text-xl">CUPOM DE DESCONTO</legend>
+            <div className="max-w-xs">
+              <input
+                value={couponCode}
+                onChange={(e) => {
+                  setCouponCode(e.target.value.toUpperCase());
+                  setCouponStatus("idle");
+                }}
+                onBlur={handleCouponBlur}
+                placeholder="Ex: LULA10-AB12CD"
+                className="input uppercase"
+              />
+              {couponStatus === "checking" && (
+                <span className="mt-1 block text-xs text-ink/50">Verificando cupom…</span>
+              )}
+              {couponStatus === "valid" && (
+                <span className="mt-1 block text-xs font-semibold text-brand-red">
+                  🎉 {couponDiscountPercent}% de desconto aplicado!
+                </span>
+              )}
+              {couponStatus === "invalid" && (
+                <span className="mt-1 block text-xs text-brand-red">Cupom inválido ou expirado.</span>
+              )}
+            </div>
+          </fieldset>
+
           {error && (
             <p className="border border-brand-red bg-brand-red/5 px-4 py-3 text-sm text-brand-red">
               {error}
@@ -286,9 +344,21 @@ export default function CheckoutPage() {
               );
             })}
           </ul>
-          <div className="mt-4 flex items-center justify-between font-display text-xl hairline pt-4">
+          <div className="mt-4 flex flex-col gap-1 hairline pt-4 text-sm">
+            <div className="flex justify-between text-ink/60">
+              <span>Subtotal</span>
+              <span>{formatCents(subtotal)}</span>
+            </div>
+            {discount > 0 && (
+              <div className="flex justify-between text-brand-red">
+                <span>Cupom ({couponDiscountPercent}%)</span>
+                <span>−{formatCents(discount)}</span>
+              </div>
+            )}
+          </div>
+          <div className="mt-2 flex items-center justify-between font-display text-xl">
             <span>TOTAL</span>
-            <span>{formatCents(subtotal)}</span>
+            <span>{formatCents(total)}</span>
           </div>
           <Link href="/carrinho" className="mt-4 block text-center text-xs text-ink/50 underline underline-offset-2">
             Voltar ao carrinho

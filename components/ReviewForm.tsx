@@ -3,25 +3,70 @@
 import { useState } from "react";
 import { StarRatingInput } from "./StarRating";
 
+interface CouponResult {
+  code: string;
+  discountPercent: number;
+}
+
 interface Props {
   orderId: number;
   reviewToken: string;
   productId: string;
   productName: string;
   alreadyReviewed: boolean;
+  existingCoupon?: CouponResult | null;
 }
 
-export function ReviewForm({ orderId, reviewToken, productId, productName, alreadyReviewed }: Props) {
+export function ReviewForm({
+  orderId,
+  reviewToken,
+  productId,
+  productName,
+  alreadyReviewed,
+  existingCoupon,
+}: Props) {
   const [done, setDone] = useState(alreadyReviewed);
   const [rating, setRating] = useState(0);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [coupon, setCoupon] = useState<CouponResult | null>(existingCoupon ?? null);
+  const [copied, setCopied] = useState(false);
+
+  async function handleCopyCode() {
+    if (!coupon) return;
+    try {
+      await navigator.clipboard.writeText(coupon.code);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      // clipboard indisponível — o código ainda fica visível pra copiar manualmente
+    }
+  }
 
   if (done) {
     return (
       <div className="border border-ink/15 p-4 text-sm text-ink/60">
-        Obrigado por avaliar <strong className="text-ink">{productName}</strong>!
+        <p>
+          Obrigado por avaliar <strong className="text-ink">{productName}</strong>!
+        </p>
+        {coupon && (
+          <div className="mt-3 border border-dashed border-brand-red bg-brand-red/5 p-3">
+            <p className="text-xs text-ink/70">
+              Você ganhou {coupon.discountPercent}% de desconto na próxima compra:
+            </p>
+            <div className="mt-1 flex items-center justify-between gap-2">
+              <code className="font-display text-lg tracking-wide text-brand-red">{coupon.code}</code>
+              <button
+                type="button"
+                onClick={handleCopyCode}
+                className="shrink-0 bg-ink px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-cream hover:bg-brand-red"
+              >
+                {copied ? "Copiado!" : "Copiar"}
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -40,12 +85,13 @@ export function ReviewForm({ orderId, reviewToken, productId, productName, alrea
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderId, reviewToken, productId, rating, comment }),
       });
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
         setError(data.error || "Não foi possível enviar sua avaliação.");
         setSubmitting(false);
         return;
       }
+      if (data.coupon) setCoupon(data.coupon);
       setDone(true);
     } catch {
       setError("Erro de conexão. Tente novamente.");
