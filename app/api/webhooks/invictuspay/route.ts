@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOrderByTransactionHash, updateOrderStatus } from "@/lib/db";
 import { normalizeStatus } from "@/lib/invictuspay";
+import { notifyOrderPaid } from "@/lib/order-tracking";
 
 /**
  * Confirmado com um payload real de criação de transação (a InvictusPay não
@@ -57,7 +58,12 @@ export async function POST(request: NextRequest) {
   }
 
   const normalizedStatus = normalizeStatus(status ?? "pending");
-  await updateOrderStatus(order.id, normalizedStatus);
+  const { changedToPaid } = await updateOrderStatus(order.id, normalizedStatus);
+
+  if (changedToPaid) {
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? request.nextUrl.origin;
+    await notifyOrderPaid(order.id, `${siteUrl}/pedido/${order.id}/sucesso`);
+  }
 
   return NextResponse.json({ received: true });
 }

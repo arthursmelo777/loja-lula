@@ -275,8 +275,20 @@ export async function getOrderItems(orderId: number): Promise<OrderItemRecord[]>
   return query<OrderItemRecord>(`SELECT * FROM order_items WHERE order_id = $1 ORDER BY id`, [orderId]);
 }
 
-export async function updateOrderStatus(orderId: number, status: OrderStatus): Promise<void> {
+/** `changedToPaid` indica se este chamado foi o que realmente confirmou o pagamento
+ *  (status anterior não era "paid") — usado pra disparar o evento de compra pro
+ *  Meta só uma vez, mesmo com múltiplos polls/webhooks batendo no mesmo pedido. */
+export async function updateOrderStatus(
+  orderId: number,
+  status: OrderStatus
+): Promise<{ changedToPaid: boolean }> {
   await ensureSchema();
+  const before = await query<{ payment_status: OrderStatus }>(
+    `SELECT payment_status FROM orders WHERE id = $1`,
+    [orderId]
+  );
+  const wasPaid = before[0]?.payment_status === "paid";
+
   await query(`UPDATE orders SET payment_status = $2, updated_at = now() WHERE id = $1`, [orderId, status]);
   // Pedido cancelado (pagamento não concluído) devolve o cupom usado nele, se houver,
   // pra não queimar o benefício de quem nem chegou a pagar.
@@ -286,6 +298,8 @@ export async function updateOrderStatus(orderId: number, status: OrderStatus): P
       [orderId]
     );
   }
+
+  return { changedToPaid: status === "paid" && !wasPaid };
 }
 
 export async function listOrders(filter?: OrderStatus): Promise<OrderRecord[]> {

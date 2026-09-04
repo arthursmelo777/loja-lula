@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOrderById, updateOrderStatus } from "@/lib/db";
 import { getInvictusTransaction, normalizeStatus } from "@/lib/invictuspay";
+import { notifyOrderPaid } from "@/lib/order-tracking";
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
@@ -33,7 +34,11 @@ export async function GET(
             : "pending";
       const status = normalizeStatus(rawStatus);
       if (status !== order.payment_status) {
-        await updateOrderStatus(order.id, status);
+        const { changedToPaid } = await updateOrderStatus(order.id, status);
+        if (changedToPaid) {
+          const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? request.nextUrl.origin;
+          await notifyOrderPaid(order.id, `${siteUrl}/pedido/${order.id}/sucesso`);
+        }
         return NextResponse.json({ status });
       }
     } catch (err) {

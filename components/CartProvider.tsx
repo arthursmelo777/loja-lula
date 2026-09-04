@@ -11,6 +11,7 @@ import {
 } from "react";
 import type { CartItem, ShirtSize } from "@/types";
 import { PRODUCTS } from "@/lib/products";
+import { trackMetaEvent } from "@/lib/meta-pixel-client";
 
 const STORAGE_KEY = "lula_cart_v1";
 
@@ -82,6 +83,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return [...prev, { productId, size, quantity, customName: customName ?? null }];
       });
       setDrawerOpen(true);
+
+      const product = PRODUCTS[productId];
+      if (product) {
+        trackMetaEvent("AddToCart", {
+          value: (product.price * quantity) / 100,
+          currency: "BRL",
+          content_ids: [productId],
+          content_type: "product",
+          contents: [{ id: productId, quantity }],
+        });
+      }
     },
     []
   );

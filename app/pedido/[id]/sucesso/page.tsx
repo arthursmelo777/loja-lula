@@ -8,6 +8,7 @@ import {
 } from "@/lib/db";
 import { formatCents } from "@/lib/format";
 import { ReviewForm } from "@/components/ReviewForm";
+import { TrackPurchase } from "@/components/TrackPurchase";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +52,14 @@ export default async function PedidoSucessoPage({
 
   return (
     <div className="mx-auto max-w-2xl px-5 py-14 sm:px-8">
+      {order.payment_status === "paid" && (
+        <TrackPurchase
+          orderId={order.id}
+          value={order.total / 100}
+          currency="BRL"
+          contentIds={items.map((i) => i.product_id)}
+        />
+      )}
       <div className="flex flex-col items-center text-center">
         <div className="flex h-16 w-16 items-center justify-center rounded-full bg-brand-red text-white">
           <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">

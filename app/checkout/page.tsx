@@ -8,6 +8,7 @@ import { PRODUCTS } from "@/lib/products";
 import { formatCents } from "@/lib/format";
 import { maskCPF, maskCEP, maskPhone, onlyDigits } from "@/lib/masks";
 import { getStoredUtm } from "@/lib/utm";
+import { trackMetaEvent } from "@/lib/meta-pixel-client";
 
 interface FormState {
   name: string;
@@ -53,6 +54,7 @@ export default function CheckoutPage() {
   // `items` vazio, o que faria o efeito abaixo mandar de volta pro carrinho
   // em vez de seguir pra tela do PIX.
   const orderPlacedRef = useRef(false);
+  const trackedInitiateCheckoutRef = useRef(false);
 
   const discount =
     couponStatus === "valid" ? Math.round((subtotal * couponDiscountPercent) / 100) : 0;
@@ -84,6 +86,20 @@ export default function CheckoutPage() {
       router.replace("/carrinho");
     }
   }, [items, router]);
+
+  useEffect(() => {
+    // O carrinho hidrata do localStorage de forma assíncrona, então `items`
+    // pode chegar vazio no primeiro render — só dispara quando (e assim que)
+    // ele tiver itens de verdade, e só uma vez por visita ao checkout.
+    if (items.length === 0 || trackedInitiateCheckoutRef.current) return;
+    trackedInitiateCheckoutRef.current = true;
+    trackMetaEvent("InitiateCheckout", {
+      value: subtotal / 100,
+      currency: "BRL",
+      content_ids: items.map((i) => i.productId),
+      num_items: items.length,
+    });
+  }, [items, subtotal]);
 
   function update<K extends keyof FormState>(key: K, value: string) {
     setForm((prev) => ({ ...prev, [key]: value }));

@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { Product, ShirtSize } from "@/types";
 import { formatCents } from "@/lib/format";
+import { trackMetaEvent } from "@/lib/meta-pixel-client";
 import { useCart } from "./CartProvider";
 
 export function ProductDetail({ product }: { product: Product }) {
@@ -15,6 +16,16 @@ export function ProductDetail({ product }: { product: Product }) {
   const [activeImage, setActiveImage] = useState<"front" | "back">("front");
   const [sizeError, setSizeError] = useState(false);
   const [customName, setCustomName] = useState("");
+
+  useEffect(() => {
+    trackMetaEvent("ViewContent", {
+      value: product.price / 100,
+      currency: "BRL",
+      content_ids: [product.id],
+      content_type: "product",
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- dispara uma vez por produto visitado
+  }, [product.id]);
 
   const images = useMemo(() => {
     const list: Array<{ key: "front" | "back"; src: string; label: string }> = [

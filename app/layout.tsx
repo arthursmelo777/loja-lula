@@ -8,6 +8,7 @@ import { Footer } from "@/components/Footer";
 import { CartDrawer } from "@/components/CartDrawer";
 import { UtmCapture } from "@/components/UtmCapture";
 import { ReviewToast } from "@/components/ReviewToast";
+import { MetaPixel } from "@/components/MetaPixel";
 
 export const metadata: Metadata = {
   title: "VesteLula — Camisetas e bonés exclusivos",
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-BR" className="h-full antialiased">
       <body className="flex min-h-full flex-col bg-cream text-ink">
         <CartProvider>
+          <MetaPixel />
           <UtmCapture />
           <Header />
           <main className="flex-1">{children}</main>
