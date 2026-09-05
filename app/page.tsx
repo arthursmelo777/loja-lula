@@ -4,9 +4,15 @@ import { listProducts } from "@/lib/products";
 import { getAllRatingSummaries } from "@/lib/db";
 import { ProductCard } from "@/components/ProductCard";
 
-// Revalida a cada 60s para as notas médias (badge de estrelas) não ficarem
-// congeladas no que existia no momento do build.
-export const revalidate = 60;
+// Força renderização dinâmica (por requisição): esta página lê as notas médias
+// direto do Postgres via getAllRatingSummaries(). Com `revalidate`, o Next tenta
+// pré-gerar "/" estaticamente durante o `next build` — ou seja, o build passa a
+// depender de conseguir abrir conexão com o banco a partir da máquina de build
+// da Vercel. Se o banco estiver indisponível, mais lento, ou o ambiente de build
+// não alcançar o host do Postgres nesse momento, o build inteiro falha com
+// "Error occurred prerendering page /". `force-dynamic` evita isso: a consulta
+// só roda em runtime (a cada requisição), nunca durante o build.
+export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const products = listProducts();

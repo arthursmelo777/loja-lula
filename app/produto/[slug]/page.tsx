@@ -1,17 +1,19 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { getProductBySlug, listProducts } from "@/lib/products";
+import { getProductBySlug } from "@/lib/products";
 import { getRatingSummary, getReviewsForProduct } from "@/lib/db";
 import { ProductDetail } from "@/components/ProductDetail";
 import { ProductReviews } from "@/components/ProductReviews";
 
-// Revalida a cada 60s: a página é estática (rápida) mas as avaliações
-// (nota média, lista, contagem) não ficam congeladas no momento do build.
-export const revalidate = 60;
-
-export function generateStaticParams() {
-  return listProducts().map((p) => ({ slug: p.slug }));
-}
+// Força renderização dinâmica (por requisição): esta página lê avaliações
+// (nota média, lista, contagem) direto do Postgres via getRatingSummary/
+// getReviewsForProduct. Com `revalidate` + `generateStaticParams`, o Next tenta
+// pré-gerar cada página de produto estaticamente durante o `next build`, o que
+// faz o build depender de conseguir conectar no banco a partir da máquina de
+// build da Vercel — se a conexão falhar ou demorar, o build inteiro quebra com
+// "Error occurred prerendering page". `force-dynamic` evita isso: a consulta só
+// roda em runtime (a cada requisição), nunca durante o build.
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({
   params,
