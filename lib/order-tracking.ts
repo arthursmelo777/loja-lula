@@ -20,6 +20,10 @@ export async function notifyOrderPaid(orderId: number, sourceUrl: string): Promi
       phone: order.customer_phone,
       contentIds: items.map((i) => i.product_id),
       sourceUrl,
+      fbp: order.meta_fbp,
+      fbc: order.meta_fbc,
+      clientIp: order.client_ip,
+      userAgent: order.client_user_agent,
     });
   } catch (err) {
     console.error("Falha ao notificar pedido pago pra Meta Conversions API:", err);

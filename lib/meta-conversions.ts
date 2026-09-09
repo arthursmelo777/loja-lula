@@ -16,6 +16,13 @@ export interface PurchaseEventInput {
   phone?: string; // qualquer formato — normalizamos e fazemos hash antes de enviar
   contentIds: string[];
   sourceUrl: string;
+  /** Cookie `_fbp` do pixel, cru (não vai com hash). */
+  fbp?: string | null;
+  /** Cookie `_fbc`, que carrega o `fbclid` do clique no anúncio. É o campo que
+   *  mais pesa pra Meta atribuir a venda ao anúncio certo. Cru, sem hash. */
+  fbc?: string | null;
+  clientIp?: string | null;
+  userAgent?: string | null;
 }
 
 /**
@@ -29,9 +36,15 @@ export async function sendMetaPurchaseEvent(input: PurchaseEventInput): Promise<
   const accessToken = process.env.META_CONVERSIONS_API_TOKEN;
   if (!pixelId || !accessToken) return; // Meta não configurado — no-op silencioso
 
-  const userData: Record<string, string[]> = {};
+  // Só e-mail e telefone vão com hash; fbp, fbc, IP e user-agent são enviados
+  // crus, conforme a especificação da Conversions API.
+  const userData: Record<string, string | string[]> = {};
   if (input.email) userData.em = [sha256(input.email)];
   if (input.phone) userData.ph = [sha256(input.phone.replace(/\D/g, ""))];
+  if (input.fbp) userData.fbp = input.fbp;
+  if (input.fbc) userData.fbc = input.fbc;
+  if (input.clientIp) userData.client_ip_address = input.clientIp;
+  if (input.userAgent) userData.client_user_agent = input.userAgent;
 
   const testEventCode = process.env.META_CONVERSIONS_API_TEST_EVENT_CODE;
 

@@ -50,6 +50,36 @@ export function captureUtmFromLocation(): void {
   }
 }
 
+const FBC_STORAGE_KEY = "lula_fbc_v1";
+
+/**
+ * O `fbclid` que a Meta cola na URL do anúncio é o que liga a venda ao clique.
+ * Normalmente o pixel do navegador transforma esse parâmetro no cookie `_fbc`
+ * sozinho, mas se o pixel for bloqueado o cookie nunca existe — justamente o
+ * caso em que dependemos da Conversions API. Então guardamos aqui uma reserva
+ * já no formato que a API espera: `fb.<subdomínio>.<timestamp>.<fbclid>`.
+ */
+export function captureFbclidFromLocation(): void {
+  if (typeof window === "undefined") return;
+  const fbclid = new URLSearchParams(window.location.search).get("fbclid");
+  if (!fbclid) return;
+  try {
+    window.sessionStorage.setItem(FBC_STORAGE_KEY, `fb.1.${Date.now()}.${fbclid}`);
+  } catch {
+    // sessionStorage indisponível — segue sem tracking
+  }
+}
+
+/** Lê a reserva do `_fbc` capturada nesta sessão do navegador. */
+export function getStoredFbc(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage.getItem(FBC_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+}
+
 /** Lê os dados de UTM capturados nesta sessão do navegador. */
 export function getStoredUtm(): UtmData {
   if (typeof window === "undefined") return EMPTY_UTM;

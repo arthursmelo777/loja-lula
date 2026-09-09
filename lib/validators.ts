@@ -94,6 +94,14 @@ export const checkoutRequestSchema = z.object({
     utm_term: "",
     utm_content: "",
   }),
+  /** Reserva do cookie `_fbc` para quando o pixel do navegador não pôde criá-lo. */
+  fbc: z
+    .string()
+    .trim()
+    .max(255)
+    .nullable()
+    .optional()
+    .transform((v) => (v ? v : null)),
 });
 
 export type CheckoutRequest = z.infer<typeof checkoutRequestSchema>;

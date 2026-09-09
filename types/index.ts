@@ -69,6 +69,13 @@ export interface OrderRecord {
   utm_campaign: string | null;
   utm_content: string | null;
   utm_term: string | null;
+  /** Cookies e cabeçalhos do navegador do comprador, capturados no checkout
+   *  e usados depois pela Conversions API do Meta (o webhook do gateway não
+   *  tem acesso a eles). */
+  meta_fbp: string | null;
+  meta_fbc: string | null;
+  client_ip: string | null;
+  client_user_agent: string | null;
   pix_qr_code: string | null;
   pix_qr_code_text: string | null;
   raw_gateway_response: unknown;

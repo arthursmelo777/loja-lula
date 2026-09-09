@@ -24,6 +24,26 @@ function getSiteUrl(request: NextRequest): string {
   return process.env.NEXT_PUBLIC_SITE_URL ?? request.nextUrl.origin;
 }
 
+/**
+ * Dados do navegador que a Conversions API usa pra casar a venda com o clique
+ * no anúncio. Precisam ser capturados aqui, no checkout, e guardados no pedido:
+ * o Purchase server-side é disparado a partir do webhook da InvictusPay, que
+ * chega do gateway e não carrega cookie, IP nem user-agent do comprador.
+ *
+ * `_fbc` e `_fbp` são cookies criados pelo próprio pixel; quando o pixel é
+ * bloqueado, o `_fbc` cai na reserva montada no navegador a partir do `fbclid`.
+ */
+function getMetaBrowserData(request: NextRequest, fbcFallback: string | null) {
+  const forwarded = request.headers.get("x-forwarded-for");
+  return {
+    fbp: request.cookies.get("_fbp")?.value ?? null,
+    fbc: request.cookies.get("_fbc")?.value ?? fbcFallback,
+    // x-forwarded-for pode vir como "cliente, proxy1, proxy2" — o primeiro é o cliente.
+    clientIp: forwarded?.split(",")[0]?.trim() || null,
+    userAgent: request.headers.get("user-agent"),
+  };
+}
+
 export async function POST(request: NextRequest) {
   let body: unknown;
   try {
@@ -40,7 +60,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const { items, customer, tracking, couponCode } = parsed.data;
+  const { items, customer, tracking, couponCode, fbc } = parsed.data;
 
   if (!isValidCPF(customer.document)) {
     return NextResponse.json({ error: "CPF inválido." }, { status: 400 });
@@ -104,6 +124,7 @@ export async function POST(request: NextRequest) {
       couponCode: couponCode,
       total: priced.total,
       utm: tracking,
+      meta: getMetaBrowserData(request, fbc),
     });
   } catch (err) {
     console.error("Falha ao criar pedido no banco:", err);

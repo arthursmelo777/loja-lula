@@ -112,6 +112,14 @@ export async function ensureSchema(): Promise<void> {
     ALTER TABLE orders ADD COLUMN IF NOT EXISTS coupon_code TEXT;
     ALTER TABLE order_items ADD COLUMN IF NOT EXISTS custom_name TEXT;
 
+    -- Dados do navegador do comprador, guardados no checkout para a Conversions
+    -- API do Meta: o Purchase é enviado a partir do webhook do gateway, que não
+    -- tem acesso a cookie, IP nem user-agent de quem comprou.
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS meta_fbp TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS meta_fbc TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS client_ip TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS client_user_agent TEXT;
+
     CREATE TABLE IF NOT EXISTS reviews (
       id BIGSERIAL PRIMARY KEY,
       order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
@@ -180,12 +188,19 @@ export interface CreateOrderInput {
     utm_term: string;
     utm_content: string;
   };
+  /** Dados do navegador do comprador usados pela Conversions API do Meta. */
+  meta: {
+    fbp: string | null;
+    fbc: string | null;
+    clientIp: string | null;
+    userAgent: string | null;
+  };
 }
 
 export async function createOrder(input: CreateOrderInput): Promise<OrderRecord> {
   await ensureSchema();
   const reviewToken = crypto.randomUUID();
-  // 21 placeholders numerados + 2 literais ('pix','pending') = 23 colunas.
+  // 25 placeholders numerados + 2 literais ('pix','pending') = 27 colunas.
   // Ao mexer aqui, recontar as duas listas — um desalinhamento já quebrou o checkout uma vez.
   const rows = await query<OrderRecord>(
     `INSERT INTO orders (
@@ -193,8 +208,9 @@ export async function createOrder(input: CreateOrderInput): Promise<OrderRecord>
       customer_name, customer_email, customer_phone, customer_document,
       street, number, complement, neighborhood, city, state, zip_code,
       subtotal, discount, coupon_code, total, payment_method, payment_status,
-      utm_source, utm_medium, utm_campaign, utm_content, utm_term
-    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'pix','pending',$17,$18,$19,$20,$21)
+      utm_source, utm_medium, utm_campaign, utm_content, utm_term,
+      meta_fbp, meta_fbc, client_ip, client_user_agent
+    ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'pix','pending',$17,$18,$19,$20,$21,$22,$23,$24,$25)
     RETURNING *`,
     [
       reviewToken,
@@ -218,6 +234,10 @@ export async function createOrder(input: CreateOrderInput): Promise<OrderRecord>
       input.utm.utm_campaign,
       input.utm.utm_content,
       input.utm.utm_term,
+      input.meta.fbp,
+      input.meta.fbc,
+      input.meta.clientIp,
+      input.meta.userAgent,
     ]
   );
   const order = rows[0];

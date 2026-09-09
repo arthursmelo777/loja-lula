@@ -7,7 +7,7 @@ import { useCart } from "@/components/CartProvider";
 import { PRODUCTS } from "@/lib/products";
 import { formatCents } from "@/lib/format";
 import { maskCPF, maskCEP, maskPhone, onlyDigits } from "@/lib/masks";
-import { getStoredUtm } from "@/lib/utm";
+import { getStoredFbc, getStoredUtm } from "@/lib/utm";
 import { trackMetaEvent } from "@/lib/meta-pixel-client";
 
 interface FormState {
@@ -154,6 +154,7 @@ export default function CheckoutPage() {
           },
           couponCode: couponStatus === "valid" ? couponCode.trim() : null,
           tracking: getStoredUtm(),
+          fbc: getStoredFbc(),
         }),
       });
 
