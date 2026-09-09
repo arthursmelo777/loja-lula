@@ -56,6 +56,36 @@ export const PRODUCTS: Record<string, Product> = {
     tangible: true,
     personalizable: true,
   },
+  shirt_red_13: {
+    id: "shirt_red_13",
+    slug: "camiseta-vermelha-13",
+    name: "Camiseta Vermelha 13",
+    category: "camiseta",
+    price: 2990,
+    description:
+      "Camiseta oversized 100% algodão em vermelho, estampa branca na frente: o número 13, o escudo e a mão em L. Costas lisas, sem estampa.",
+    images: {
+      front: "/products/shirt-red-13-front.jpg",
+      back: "/products/shirt-red-13-back.jpg",
+    },
+    sizes: SHIRT_SIZES,
+    tangible: true,
+  },
+  shirt_black_feliz: {
+    id: "shirt_black_feliz",
+    slug: "camiseta-preta-lula-sem-medo-de-ser-feliz",
+    name: "Camiseta Preta Lula – Sem Medo de Ser Feliz",
+    category: "camiseta",
+    price: 2990,
+    description:
+      "Camiseta oversized 100% algodão em preto, estampa branca e vermelha na frente: a mão em L formando a assinatura 'Lula', a estrela e a frase 'Sem medo de ser Feliz!'. Costas lisas, sem estampa.",
+    images: {
+      front: "/products/shirt-black-feliz-front.jpg",
+      back: "/products/shirt-black-feliz-back.jpg",
+    },
+    sizes: SHIRT_SIZES,
+    tangible: true,
+  },
   cap_black: {
     id: "cap_black",
     slug: "bone-lula-preto",
