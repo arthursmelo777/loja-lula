@@ -1,17 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOrderById, getOrderItems, attachTransaction } from "@/lib/db";
 import { getProductById } from "@/lib/products";
-import {
-  createPixTransaction,
-  getProductHash,
-  normalizeInvictusPixResponse,
-} from "@/lib/invictuspay";
+import { getProcessadora, ProcessadoraNaoConfigurada } from "@/lib/pagamentos";
 import { generatePixQrCodeImage } from "@/lib/pix-qrcode";
 
 /**
  * Gera (ou regera) a cobrança PIX de um pedido que já existe no banco.
  *
- * O checkout cria o pedido ANTES de falar com a InvictusPay. Quando o gateway
+ * O checkout cria o pedido ANTES de falar com a processadora. Quando ela
  * falha, o pedido fica salvo com status "pending" mas sem código PIX nenhum, e
  * a resposta do checkout já mandava o comprador para a tela do pedido dizendo
  * "você pode tentar novamente na tela do pedido" — só que não existia nada por
@@ -67,23 +63,24 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
 
   try {
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? request.nextUrl.origin;
+    const processadora = getProcessadora();
 
-    const raw = await createPixTransaction({
-      amount: order.total,
-      customer: {
-        name: order.customer_name,
+    const cobranca = await processadora.criarCobrancaPix({
+      valor: order.total,
+      cliente: {
+        nome: order.customer_name,
         email: order.customer_email,
-        phone_number: order.customer_phone,
-        document: order.customer_document,
-        street_name: order.street,
-        number: order.number,
-        complement: order.complement ?? "",
-        neighborhood: order.neighborhood,
-        city: order.city,
-        state: order.state,
-        zip_code: order.zip_code,
+        telefone: order.customer_phone,
+        documento: order.customer_document,
+        rua: order.street,
+        numero: order.number,
+        complemento: order.complement ?? "",
+        bairro: order.neighborhood,
+        cidade: order.city,
+        estado: order.state,
+        cep: order.zip_code,
       },
-      cart: items.map((item) => {
+      itens: items.map((item) => {
         const product = getProductById(item.product_id);
         if (!product) {
           throw new Error(`Produto ${item.product_id} não existe mais no catálogo.`);
@@ -92,18 +89,14 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
         if (item.variant) parts.push(item.variant);
         if (item.custom_name) parts.push(`Nome: ${item.custom_name}`);
         return {
-          product_hash: getProductHash(product.category),
-          title: parts.join(" - "),
-          cover: null,
-          price: item.unit_price,
-          quantity: item.quantity,
-          operation_type: 1,
-          tangible: true,
+          productId: item.product_id,
+          category: product.category,
+          titulo: parts.join(" - "),
+          precoUnitario: item.unit_price,
+          quantidade: item.quantity,
         };
       }),
-      postbackUrl: `${siteUrl}/api/webhooks/invictuspay`,
-      // A oferta acompanha a categoria do primeiro item do pedido.
-      offerCategory: getProductById(items[0].product_id)?.category ?? "camiseta",
+      urlWebhook: `${siteUrl}/api/webhooks/pagamento`,
       tracking: {
         // `src` não é persistido no pedido; os demais UTMs voltam do banco.
         src: "",
@@ -115,32 +108,37 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
       },
     });
 
-    const normalized = normalizeInvictusPixResponse(raw);
-
-    if (!normalized.qrCodeText && !normalized.qrCodeImage) {
-      console.error("InvictusPay respondeu sem código PIX no retry:", JSON.stringify(raw));
+    if (!cobranca.qrCodeTexto && !cobranca.qrCodeImagem) {
+      console.error("Processadora respondeu sem código PIX:", JSON.stringify(cobranca.raw));
       return NextResponse.json(
-        { error: "O gateway respondeu sem o código PIX. Tente novamente em instantes." },
+        { error: "A processadora respondeu sem o código PIX. Tente novamente em instantes." },
         { status: 502 }
       );
     }
 
     await attachTransaction(
       order.id,
-      normalized.transactionHash,
-      normalized.qrCodeImage,
-      normalized.qrCodeText,
-      raw
+      cobranca.idTransacao,
+      cobranca.qrCodeImagem,
+      cobranca.qrCodeTexto,
+      cobranca.raw
     );
 
     return NextResponse.json({
-      qrCodeText: normalized.qrCodeText,
+      qrCodeText: cobranca.qrCodeTexto,
       qrCodeImage:
-        normalized.qrCodeImage ??
-        (normalized.qrCodeText ? await generatePixQrCodeImage(normalized.qrCodeText) : null),
+        cobranca.qrCodeImagem ??
+        (cobranca.qrCodeTexto ? await generatePixQrCodeImage(cobranca.qrCodeTexto) : null),
     });
   } catch (err) {
-    console.error("Falha ao regerar a cobrança PIX:", err);
+    if (err instanceof ProcessadoraNaoConfigurada) {
+      console.error("Tentativa de gerar PIX sem processadora configurada:", err);
+      return NextResponse.json(
+        { error: "Pagamento indisponível no momento. Tente novamente mais tarde." },
+        { status: 503 }
+      );
+    }
+    console.error("Falha ao gerar a cobrança PIX:", err);
     return NextResponse.json(
       { error: "Não foi possível gerar o PIX agora. Tente novamente em instantes." },
       { status: 502 }

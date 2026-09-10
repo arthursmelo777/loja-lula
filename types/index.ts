@@ -83,14 +83,6 @@ export interface OrderRecord {
   updated_at: string;
 }
 
-export interface NormalizedPixResult {
-  transactionHash: string;
-  qrCodeImage: string | null; // base64 ou URL da imagem do QR Code
-  qrCodeText: string | null; // código "copia e cola"
-  status: OrderStatus;
-  raw: unknown;
-}
-
 export interface UtmData {
   src: string;
   utm_source: string;

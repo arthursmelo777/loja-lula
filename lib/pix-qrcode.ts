@@ -2,10 +2,10 @@ import "server-only";
 import QRCode from "qrcode";
 
 /**
- * A InvictusPay não devolve uma imagem pronta do QR Code (os campos
- * `pix.qr_code_base64` e `pix.pix_url` vêm sempre `null` nas respostas reais)
- * — só o código "copia e cola" (`pix.pix_qr_code`). Geramos a imagem aqui a
- * partir desse texto, sob demanda, ao renderizar a tela de pagamento.
+ * Muitas processadoras devolvem só o código "copia e cola" (o payload EMV) e
+ * nenhuma imagem pronta do QR Code. Geramos a imagem aqui a partir desse texto,
+ * sob demanda, ao renderizar a tela de pagamento — assim a loja não depende de
+ * a processadora mandar figura.
  */
 export async function generatePixQrCodeImage(pixCode: string): Promise<string | null> {
   try {

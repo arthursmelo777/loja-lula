@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOrderById, updateOrderStatus } from "@/lib/db";
-import { getInvictusTransaction, normalizeStatus } from "@/lib/invictuspay";
+import { getProcessadora, ProcessadoraNaoConfigurada } from "@/lib/pagamentos";
 import { notifyOrderPaid } from "@/lib/order-tracking";
 
 export async function GET(
@@ -18,21 +18,11 @@ export async function GET(
     return NextResponse.json({ error: "Pedido não encontrado." }, { status: 404 });
   }
 
-  // Se ainda está pendente e temos o hash da transação, consulta a InvictusPay
+  // Se ainda está pendente e temos o id da transação, consulta a processadora
   // para o caso do webhook ainda não ter chegado.
   if (order.payment_status === "pending" && order.transaction_hash) {
     try {
-      const raw = (await getInvictusTransaction(order.transaction_hash)) as Record<string, unknown>;
-      const data = (raw?.data ?? raw) as Record<string, unknown>;
-      // A InvictusPay devolve o status em `payment_status` (ex: "waiting_payment",
-      // "paid"), não em `status` — confirmado no payload real da API.
-      const rawStatus =
-        typeof data?.payment_status === "string"
-          ? data.payment_status
-          : typeof data?.status === "string"
-            ? data.status
-            : "pending";
-      const status = normalizeStatus(rawStatus);
+      const { status } = await getProcessadora().consultarTransacao(order.transaction_hash);
       if (status !== order.payment_status) {
         const { changedToPaid } = await updateOrderStatus(order.id, status);
         if (changedToPaid) {
@@ -42,8 +32,11 @@ export async function GET(
         return NextResponse.json({ status });
       }
     } catch (err) {
-      console.error("Falha ao consultar status na InvictusPay:", err);
-      // segue com o status atual do banco — não bloqueia o polling do cliente
+      // Sem processadora configurada, ou consulta falhou: seguimos com o status
+      // do banco. O polling do comprador nunca deve quebrar por causa disso.
+      if (!(err instanceof ProcessadoraNaoConfigurada)) {
+        console.error("Falha ao consultar o status na processadora:", err);
+      }
     }
   }
 

@@ -1,14 +1,14 @@
 # VesteLula — Loja + Checkout PIX
 
 Loja virtual (Next.js App Router + TypeScript + Tailwind) para venda de camisetas
-e bonés, com checkout próprio e pagamento via PIX através da InvictusPay.
+e bonés, com checkout próprio e pagamento via PIX.
 
 ## Rodando localmente
 
 ```bash
 npm install
 cp .env.example .env
-# preencha DATABASE_URL, INVICTUSPAY_* e ADMIN_* no .env
+# preencha DATABASE_URL e ADMIN_* no .env
 npm run dev
 ```
 
@@ -20,27 +20,26 @@ primeira chamada que usar o banco — não é preciso rodar migrations manuais.
 Veja `.env.example`. Resumo do que falta preencher antes de operar em produção:
 
 - `DATABASE_URL`: string de conexão Postgres (ex: Supabase).
-- `INVICTUSPAY_API_TOKEN`: gere um token novo na InvictusPay — nunca reaproveite
-  um token que já tenha sido exposto.
-- `INVICTUSPAY_OFFER_HASH`: hash da oferta cadastrada na InvictusPay.
-- `INVICTUSPAY_PRODUCT_HASH_SHIRT` / `INVICTUSPAY_PRODUCT_HASH_CAP`: hashes de
-  produto (um para camisetas, outro para bonés).
+- Credenciais da processadora de pagamento: dependem de qual você usar (veja
+  "Processadora de pagamento" abaixo). Nenhuma vem configurada.
 - `ADMIN_PASSWORD`: senha do painel `/admin`.
 - `ADMIN_SESSION_SECRET`: string aleatória longa (ex: `openssl rand -hex 32`).
 
 ## Ajuste pendente: formato da resposta do PIX
 
-A documentação da InvictusPay fornecida não mostrava o JSON completo devolvido
-na criação de uma cobrança PIX. Por isso `lib/invictuspay.ts` tem a função
-`normalizeInvictusPixResponse()`, que tenta reconhecer os nomes de campo mais
-comuns (QR Code em base64, código copia-e-cola, hash da transação). Assim que
-você tiver uma resposta real da API:
+A loja não fala com nenhuma processadora específica: ela fala com a interface
+`ProcessadoraPagamento`, em `lib/pagamentos.ts`. Para ligar uma processadora:
 
-1. Gere uma transação de teste e salve o JSON retornado.
-2. Ajuste os caminhos dentro de `normalizeInvictusPixResponse` para bater com
-   os nomes de campo reais.
-3. Faça o mesmo em `app/api/webhooks/invictuspay/route.ts` (`extractHashAndStatus`)
-   assim que tiver um payload real de webhook.
+1. Crie `lib/processadoras/<nome>.ts` implementando `ProcessadoraPagamento`
+   (`criarCobrancaPix`, `consultarTransacao`, `reembolsar`, `interpretarWebhook`).
+2. Devolva essa implementação em `getProcessadora()`, em `lib/pagamentos.ts`.
+3. Cadastre `https://SEU-DOMINIO/api/webhooks/pagamento` como URL de webhook no
+   painel da processadora.
+
+Nenhuma rota, página ou tabela precisa mudar — conceitos próprios de cada
+fornecedor (hashes de oferta, ids de produto, etc.) ficam dentro do adaptador.
+Enquanto não houver processadora registrada, os pedidos continuam sendo criados
+e gravados no banco; só a geração da cobrança falha, com mensagem explícita.
 
 ## Estrutura
 
@@ -56,7 +55,7 @@ app/
   api/
     checkout/pix/route.ts          — cria pedido + cobrança PIX
     orders/[id]/status/route.ts    — consulta status do pedido
-    webhooks/invictuspay/route.ts  — recebe atualizações de pagamento
+    webhooks/pagamento/route.ts    — recebe atualizações de pagamento
     admin/...                      — login, listagem, detalhe e reembolso
 
 lib/
@@ -64,17 +63,18 @@ lib/
   pricing.ts      — recalcula o carrinho no servidor
   validators.ts   — validação com Zod + CPF
   db.ts           — Postgres (pg) + criação de tabelas
-  invictuspay.ts  — cliente da API da InvictusPay
+  pagamentos.ts   — interface da processadora de pagamento
   admin-auth.ts   — sessão assinada do painel admin
 ```
 
 ## Segurança
 
-- O token da InvictusPay só é usado em código server-side (`lib/invictuspay.ts`,
-  marcado com `import "server-only"`), nunca é enviado ao navegador.
+- As credenciais da processadora só são usadas em código server-side
+  (`lib/pagamentos.ts` e o adaptador, marcados com `import "server-only"`),
+  nunca são enviadas ao navegador.
 - O preço de cada item é sempre recalculado a partir de `lib/products.ts`
   (`lib/pricing.ts`); o frontend envia apenas `productId`, `size` e `quantity`.
-- `/admin` e `/api/admin/*` são protegidos por `middleware.ts` (sessão assinada
+- `/admin` e `/api/admin/*` são protegidos por `proxy.ts` (sessão assinada
   via cookie httpOnly).
 - Reembolso só é acessível pelo painel admin autenticado — não existe endpoint
   público para o cliente reembolsar.

@@ -29,8 +29,8 @@ export default async function PedidoPixPage({
 
   if (!order) notFound();
 
-  // Prioriza uma imagem vinda do gateway, se algum dia existir; na prática a
-  // InvictusPay só devolve o texto, então geramos a imagem a partir dele.
+  // Prioriza a imagem vinda da processadora, quando ela manda uma; do
+  // contrário, geramos o QR Code a partir do código "copia e cola".
   const qrCodeImage =
     order.pix_qr_code ?? (order.pix_qr_code_text ? await generatePixQrCodeImage(order.pix_qr_code_text) : null);
 

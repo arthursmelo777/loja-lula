@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getOrderById, updateOrderStatus } from "@/lib/db";
-import { refundInvictusTransaction } from "@/lib/invictuspay";
+import { getProcessadora, ProcessadoraNaoConfigurada } from "@/lib/pagamentos";
 
 export async function POST(
   request: NextRequest,
@@ -41,11 +41,20 @@ export async function POST(
   }
 
   try {
-    await refundInvictusTransaction(order.transaction_hash, amount);
+    await getProcessadora().reembolsar(order.transaction_hash, amount);
+    // Só marca como reembolsado depois que a processadora confirmou — nunca
+    // antes, senão o painel mostraria um estorno que não aconteceu.
     await updateOrderStatus(order.id, "refunded");
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("Falha ao reembolsar na InvictusPay:", err);
-    return NextResponse.json({ error: "Falha ao processar reembolso na InvictusPay." }, { status: 502 });
+    if (err instanceof ProcessadoraNaoConfigurada) {
+      console.error("Tentativa de reembolso sem processadora configurada:", err);
+      return NextResponse.json(
+        { error: "Nenhuma processadora de pagamento está configurada." },
+        { status: 503 }
+      );
+    }
+    console.error("Falha ao processar o reembolso:", err);
+    return NextResponse.json({ error: "Falha ao processar o reembolso." }, { status: 502 });
   }
 }

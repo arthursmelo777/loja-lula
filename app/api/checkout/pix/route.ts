@@ -2,11 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkoutRequestSchema, isValidCPF } from "@/lib/validators";
 import { priceCart, applyDiscountPercent } from "@/lib/pricing";
 import { createOrder, attachTransaction, findValidCoupon, redeemCoupon } from "@/lib/db";
-import {
-  createPixTransaction,
-  getProductHash,
-  normalizeInvictusPixResponse,
-} from "@/lib/invictuspay";
+import { getProcessadora, ProcessadoraNaoConfigurada } from "@/lib/pagamentos";
 
 function getSiteUrl(request: NextRequest): string {
   return process.env.NEXT_PUBLIC_SITE_URL ?? request.nextUrl.origin;
@@ -15,8 +11,8 @@ function getSiteUrl(request: NextRequest): string {
 /**
  * Dados do navegador que a Conversions API usa pra casar a venda com o clique
  * no anúncio. Precisam ser capturados aqui, no checkout, e guardados no pedido:
- * o Purchase server-side é disparado a partir do webhook da InvictusPay, que
- * chega do gateway e não carrega cookie, IP nem user-agent do comprador.
+ * o Purchase server-side é disparado a partir do webhook da processadora, que
+ * chega do servidor dela e não carrega cookie, IP nem user-agent do comprador.
  *
  * `_fbc` e `_fbp` são cookies criados pelo próprio pixel; quando o pixel é
  * bloqueado, o `_fbc` cai na reserva montada no navegador a partir do `fbclid`.
@@ -132,53 +128,48 @@ export async function POST(request: NextRequest) {
     }
   }
 
-  // 2) Chama a InvictusPay para gerar a cobrança PIX.
+  // 2) Pede a cobrança PIX à processadora configurada.
   try {
     const siteUrl = getSiteUrl(request);
-    const raw = await createPixTransaction({
-      amount: priced.total,
-      customer: {
-        name: customer.name,
+    const processadora = getProcessadora();
+
+    const cobranca = await processadora.criarCobrancaPix({
+      valor: priced.total,
+      cliente: {
+        nome: customer.name,
         email: customer.email,
-        phone_number: customer.phone,
-        document: customer.document,
-        street_name: customer.street,
-        number: customer.number,
-        complement: customer.complement ?? "",
-        neighborhood: customer.neighborhood,
-        city: customer.city,
-        state: customer.state,
-        zip_code: customer.zipCode,
+        telefone: customer.phone,
+        documento: customer.document,
+        rua: customer.street,
+        numero: customer.number,
+        complemento: customer.complement ?? "",
+        bairro: customer.neighborhood,
+        cidade: customer.city,
+        estado: customer.state,
+        cep: customer.zipCode,
       },
-      cart: priced.items.map((i) => {
+      itens: priced.items.map((i) => {
         const parts = [i.productName];
         if (i.variant) parts.push(i.variant);
         if (i.customName) parts.push(`Nome: ${i.customName}`);
         return {
-          product_hash: getProductHash(i.category),
-          title: parts.join(" - "),
-          cover: null,
-          price: i.unitPrice,
-          quantity: i.quantity,
-          operation_type: 1,
-          tangible: true,
+          productId: i.productId,
+          category: i.category,
+          titulo: parts.join(" - "),
+          precoUnitario: i.unitPrice,
+          quantidade: i.quantity,
         };
       }),
-      postbackUrl: `${siteUrl}/api/webhooks/invictuspay`,
+      urlWebhook: `${siteUrl}/api/webhooks/pagamento`,
       tracking,
-      // A oferta acompanha a categoria do primeiro item do carrinho — é ela que
-      // a InvictusPay usa como oferta da cobrança.
-      offerCategory: priced.items[0].category,
     });
-
-    const normalized = normalizeInvictusPixResponse(raw);
 
     await attachTransaction(
       order.id,
-      normalized.transactionHash,
-      normalized.qrCodeImage,
-      normalized.qrCodeText,
-      raw
+      cobranca.idTransacao,
+      cobranca.qrCodeImagem,
+      cobranca.qrCodeTexto,
+      cobranca.raw
     );
 
     return NextResponse.json({
@@ -186,11 +177,19 @@ export async function POST(request: NextRequest) {
       redirectUrl: `/pedido/${order.id}/pix`,
     });
   } catch (err) {
-    console.error("Falha ao criar transação PIX na InvictusPay:", err);
+    // O pedido JÁ existe no banco — nada se perde. O comprador vai para a tela
+    // do pedido, onde consegue tentar gerar o PIX de novo.
+    const semProcessadora = err instanceof ProcessadoraNaoConfigurada;
+    if (semProcessadora) {
+      console.error("Checkout sem processadora de pagamento configurada:", err);
+    } else {
+      console.error("Falha ao criar a cobrança PIX na processadora:", err);
+    }
     return NextResponse.json(
       {
-        error:
-          "Pedido criado, mas a geração do PIX falhou. Você pode tentar novamente na tela do pedido.",
+        error: semProcessadora
+          ? "Pagamento indisponível no momento. Seu pedido foi registrado e você pode gerar o PIX na tela do pedido assim que o pagamento voltar."
+          : "Pedido criado, mas a geração do PIX falhou. Você pode tentar novamente na tela do pedido.",
         orderId: order.id,
         redirectUrl: `/pedido/${order.id}/pix`,
       },
