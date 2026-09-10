@@ -9,6 +9,7 @@ import {
 import { formatCents } from "@/lib/format";
 import { ReviewForm } from "@/components/ReviewForm";
 import { TrackPurchase } from "@/components/TrackPurchase";
+import { PedidoIndisponivel } from "@/components/PedidoIndisponivel";
 
 export const dynamic = "force-dynamic";
 
@@ -21,34 +22,55 @@ export default async function PedidoSucessoPage({
   const orderId = Number(id);
   if (!Number.isFinite(orderId)) notFound();
 
-  const order = await getOrderById(orderId);
-  if (!order) notFound();
+  // Esta é a página que o comprador vê depois de pagar: uma falha de banco não
+  // pode virar tela de erro do runtime. Sem o pedido não há o que mostrar, então
+  // exibimos o aviso de "tente novamente" com o número do pedido.
+  let order;
+  let items;
+  try {
+    order = await getOrderById(orderId);
+    if (order) items = await getOrderItems(order.id);
+  } catch (err) {
+    console.error(`Falha ao carregar o pedido ${orderId}:`, err);
+    return <PedidoIndisponivel orderId={orderId} />;
+  }
 
-  const items = await getOrderItems(order.id);
+  if (!order || !items) notFound();
+  const pedido = order;
 
-  // Um formulário de avaliação por produto único do pedido (não por linha/tamanho).
-  const uniqueProducts = Array.from(
-    new Map(items.map((i) => [i.product_id, i.product_name])).entries()
-  );
-  const reviewables =
-    order.payment_status === "paid" && order.review_token
-      ? await Promise.all(
-          uniqueProducts.map(async ([productId, productName]) => ({
-            productId,
-            productName,
-            alreadyReviewed: Boolean(await getReviewForOrderProduct(order.id, productId)),
-          }))
-        )
-      : [];
+  // Avaliações e cupom são o "extra" da página. Se essa parte falhar, o
+  // comprador ainda precisa ver a confirmação do pagamento — então ela nunca
+  // derruba a página inteira.
+  let reviewables: Array<{ productId: string; productName: string; alreadyReviewed: boolean }> = [];
+  let existingCoupon: { code: string; discountPercent: number } | null = null;
 
-  // Se pelo menos um item já foi avaliado, o pedido já ganhou seu cupom —
-  // recuperamos ele pra continuar mostrando mesmo depois de recarregar a página.
-  const existingCoupon = reviewables.some((r) => r.alreadyReviewed)
-    ? await getOrCreateCouponForOrder(order.id).then((c) => ({
-        code: c.code,
-        discountPercent: c.discount_percent,
-      }))
-    : null;
+  try {
+    // Um formulário de avaliação por produto único do pedido (não por linha/tamanho).
+    const uniqueProducts = Array.from(
+      new Map(items.map((i) => [i.product_id, i.product_name])).entries()
+    );
+    reviewables =
+      pedido.payment_status === "paid" && pedido.review_token
+        ? await Promise.all(
+            uniqueProducts.map(async ([productId, productName]) => ({
+              productId,
+              productName,
+              alreadyReviewed: Boolean(await getReviewForOrderProduct(pedido.id, productId)),
+            }))
+          )
+        : [];
+
+    // Se pelo menos um item já foi avaliado, o pedido já ganhou seu cupom —
+    // recuperamos ele pra continuar mostrando mesmo depois de recarregar a página.
+    existingCoupon = reviewables.some((r) => r.alreadyReviewed)
+      ? await getOrCreateCouponForOrder(pedido.id).then((c) => ({
+          code: c.code,
+          discountPercent: c.discount_percent,
+        }))
+      : null;
+  } catch (err) {
+    console.error(`Falha ao montar as avaliações do pedido ${orderId}:`, err);
+  }
 
   return (
     <div className="mx-auto max-w-2xl px-5 py-14 sm:px-8">

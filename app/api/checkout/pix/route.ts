@@ -2,23 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { checkoutRequestSchema, isValidCPF } from "@/lib/validators";
 import { priceCart, applyDiscountPercent } from "@/lib/pricing";
 import { createOrder, attachTransaction, findValidCoupon, redeemCoupon } from "@/lib/db";
-import { createPixTransaction, normalizeInvictusPixResponse } from "@/lib/invictuspay";
-
-// Um product_hash por categoria, conforme fornecido pela InvictusPay.
-function getProductHash(category: "camiseta" | "bone"): string {
-  const hash =
-    category === "camiseta"
-      ? process.env.INVICTUSPAY_PRODUCT_HASH_SHIRT
-      : process.env.INVICTUSPAY_PRODUCT_HASH_CAP;
-  if (!hash) {
-    throw new Error(
-      `Variável de ambiente ausente: ${
-        category === "camiseta" ? "INVICTUSPAY_PRODUCT_HASH_SHIRT" : "INVICTUSPAY_PRODUCT_HASH_CAP"
-      }`
-    );
-  }
-  return hash;
-}
+import {
+  createPixTransaction,
+  getProductHash,
+  normalizeInvictusPixResponse,
+} from "@/lib/invictuspay";
 
 function getSiteUrl(request: NextRequest): string {
   return process.env.NEXT_PUBLIC_SITE_URL ?? request.nextUrl.origin;
@@ -178,6 +166,9 @@ export async function POST(request: NextRequest) {
       }),
       postbackUrl: `${siteUrl}/api/webhooks/invictuspay`,
       tracking,
+      // A oferta acompanha a categoria do primeiro item do carrinho — é ela que
+      // a InvictusPay usa como oferta da cobrança.
+      offerCategory: priced.items[0].category,
     });
 
     const normalized = normalizeInvictusPixResponse(raw);

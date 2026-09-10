@@ -13,6 +13,37 @@ function getToken(): string {
   return token;
 }
 
+/** Um product_hash por categoria, conforme fornecido pela InvictusPay. */
+export function getProductHash(category: "camiseta" | "bone"): string {
+  const variavel =
+    category === "camiseta" ? "INVICTUSPAY_PRODUCT_HASH_SHIRT" : "INVICTUSPAY_PRODUCT_HASH_CAP";
+  const hash = process.env[variavel];
+  if (!hash) throw new Error(`Variável de ambiente ausente: ${variavel}`);
+  return hash;
+}
+
+/**
+ * Cada produto cadastrado na InvictusPay tem a SUA oferta — camiseta e boné não
+ * compartilham offer_hash. O histórico real de transações da conta confirma:
+ * camiseta usa a oferta q5q7cv0hes (produto k2zdlfbrrp) e boné usa vr6ysqln9k
+ * (produto pywa4t06zq). Mandar uma oferta que não corresponde ao produto do
+ * carrinho faz a API responder 400 "Ocorreu um erro ao processar o pagamento".
+ *
+ * `INVICTUSPAY_OFFER_HASH` (sem sufixo) continua aceita como fallback para não
+ * quebrar ambientes antigos, mas o certo é definir uma por categoria.
+ */
+export function getOfferHash(category: "camiseta" | "bone"): string {
+  const variavel =
+    category === "camiseta" ? "INVICTUSPAY_OFFER_HASH_SHIRT" : "INVICTUSPAY_OFFER_HASH_CAP";
+  const hash = process.env[variavel] ?? process.env.INVICTUSPAY_OFFER_HASH;
+  if (!hash) {
+    throw new Error(
+      `Variável de ambiente ausente: ${variavel} (nem o fallback INVICTUSPAY_OFFER_HASH está definido).`
+    );
+  }
+  return hash;
+}
+
 interface InvictusCustomer {
   name: string;
   email: string;
@@ -43,6 +74,8 @@ export interface CreatePixTransactionInput {
   cart: InvictusCartItem[];
   postbackUrl: string;
   tracking: UtmData;
+  /** Categoria que define qual oferta usar na cobrança. Ver getOfferHash(). */
+  offerCategory: "camiseta" | "bone";
 }
 
 async function invictusFetch(path: string, init: RequestInit): Promise<unknown> {
@@ -82,12 +115,7 @@ async function invictusFetch(path: string, init: RequestInit): Promise<unknown> 
 }
 
 export async function createPixTransaction(input: CreatePixTransactionInput): Promise<unknown> {
-  const offerHash = process.env.INVICTUSPAY_OFFER_HASH;
-  if (!offerHash) {
-    throw new Error(
-      "INVICTUSPAY_OFFER_HASH não configurada. Adicione o offer_hash fornecido pela InvictusPay no .env."
-    );
-  }
+  const offerHash = getOfferHash(input.offerCategory);
 
   const body = {
     amount: input.amount,
@@ -137,6 +165,24 @@ export async function refundInvictusTransaction(hash: string, amount: number): P
  * Mantemos os fallbacks para nomes alternativos por segurança (webhook e
  * outras respostas podem variar), mas nunca inventamos um campo inexistente.
  */
+/**
+ * Um payload EMV do PIX ("copia e cola") começa sempre pelo campo 00
+ * (Payload Format Indicator) com valor "01" — ou seja, os caracteres "0002" —
+ * e os QRs brasileiros carregam o GUI "br.gov.bcb.pix" no campo 26.
+ */
+function pareceCodigoPix(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const s = value.trim();
+  return s.startsWith("0002") || /br\.gov\.bcb\.pix/i.test(s);
+}
+
+/** Data URL, ou base64 cru cujos primeiros bytes são a assinatura de PNG/JPEG/GIF. */
+function pareceImagem(value: unknown): value is string {
+  if (typeof value !== "string") return false;
+  const s = value.trim();
+  return s.startsWith("data:image/") || /^(iVBORw0KGgo|\/9j\/|R0lGOD)/.test(s);
+}
+
 export function normalizeInvictusPixResponse(raw: unknown): NormalizedPixResult {
   const obj = (raw ?? {}) as Record<string, unknown>;
   const data = (obj.data ?? obj) as Record<string, unknown>;
@@ -163,20 +209,39 @@ export function normalizeInvictusPixResponse(raw: unknown): NormalizedPixResult 
     (pick(["transaction", "hash"]) as string | null) ??
     "";
 
-  const qrCodeImage =
-    (pick(["pix", "qr_code_base64"]) as string | null) ??
-    (pick(["pix", "qr_code"]) as string | null) ??
-    (pick(["qr_code_base64"]) as string | null) ??
-    (pick(["qr_code_image"]) as string | null) ??
-    null;
+  // Candidatos por nome de campo. Repare que `qr_code` é ambíguo: o nome sugere
+  // imagem, mas gateways brasileiros frequentemente colocam o payload EMV
+  // ("copia e cola") nele.
+  const candidatoImagem = (pick(
+    ["pix", "qr_code_base64"],
+    ["pix", "qr_code_image"],
+    ["qr_code_base64"],
+    ["qr_code_image"]
+  ) ?? null) as string | null;
+
+  const candidatoTexto = (pick(
+    ["pix", "pix_qr_code"],
+    ["pix", "qr_code_text"],
+    ["pix", "emv"],
+    ["pix", "copia_e_cola"],
+    ["pix", "code"],
+    ["pix_qr_code"],
+    ["qr_code_text"]
+  ) ?? null) as string | null;
+
+  const candidatoAmbiguo = (pick(["pix", "qr_code"], ["qr_code"]) ?? null) as string | null;
+
+  // Classificamos pelo CONTEÚDO, nunca pelo nome do campo. Se confiássemos no
+  // nome, um payload EMV vindo em `pix.qr_code` seria gravado como imagem e a
+  // tela renderizaria `data:image/png;base64,<texto EMV>` — um QR Code quebrado
+  // — e ainda deixaria o campo "copia e cola" vazio. Na dúvida preferimos
+  // tratar o valor como texto: a imagem a gente regenera a partir dele em
+  // lib/pix-qrcode.ts, mas o texto não dá pra recuperar de uma imagem.
+  const qrCodeImage = [candidatoImagem, candidatoAmbiguo].find(pareceImagem) ?? null;
 
   const qrCodeText =
-    (pick(["pix", "qr_code_text"]) as string | null) ??
-    (pick(["pix", "pix_qr_code"]) as string | null) ??
-    (pick(["pix", "code"]) as string | null) ??
-    (pick(["pix_qr_code"]) as string | null) ??
-    (pick(["qr_code_text"]) as string | null) ??
-    null;
+    [candidatoTexto, candidatoAmbiguo, candidatoImagem].find(pareceCodigoPix) ??
+    (typeof candidatoTexto === "string" && !pareceImagem(candidatoTexto) ? candidatoTexto : null);
 
   const rawStatus = (
     (pick(["payment_status"]) as string | null) ?? (pick(["status"]) as string | null) ?? "pending"

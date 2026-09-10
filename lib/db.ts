@@ -19,6 +19,8 @@ function createPool(): Pool {
       "DATABASE_URL não configurada. Defina a variável de ambiente antes de usar o banco de dados."
     );
   }
+  avisarSeSenhaMalEscapada(connectionString);
+
   return new Pool({
     connectionString,
     // Supabase/managed Postgres normalmente exigem SSL; em desenvolvimento local
@@ -26,6 +28,40 @@ function createPool(): Pool {
     ssl: process.env.DATABASE_SSL === "false" ? undefined : { rejectUnauthorized: false },
     max: 5,
   });
+}
+
+/**
+ * A DATABASE_URL é uma URI: o driver decodifica a senha com percent-decoding
+ * antes de mandar para o Postgres. Uma senha que contenha "%" literal precisa
+ * estar escrita como "%25" — senão "…%2f…" vira "…/…" e a autenticação falha
+ * com "password authentication failed", um erro que parece senha errada e faz
+ * a pessoa trocar a senha à toa. Caracteres como @ : / ? # também precisam ser
+ * escapados. Só avisamos: nunca logamos a senha.
+ */
+function avisarSeSenhaMalEscapada(connectionString: string): void {
+  const match = /^[^:]+:\/\/[^:@/]*:([^@]*)@/.exec(connectionString);
+  const senha = match?.[1];
+  if (!senha) return;
+
+  // Um "%" que não inicia um par hexadecimal válido é percent-encoding quebrado.
+  const percentSolto = /%(?![0-9A-Fa-f]{2})/.test(senha);
+  // Um "%XX" válido é decodificado — se o resultado muda, a senha enviada ao
+  // banco não é a que está escrita no .env.
+  let decodificaDiferente = false;
+  try {
+    decodificaDiferente = decodeURIComponent(senha) !== senha;
+  } catch {
+    decodificaDiferente = true;
+  }
+
+  if (percentSolto || decodificaDiferente) {
+    console.warn(
+      "[db] Atenção: a senha dentro de DATABASE_URL contém '%' e será decodificada " +
+        "pelo driver antes de chegar ao Postgres — a senha enviada NÃO é a que está " +
+        "escrita no .env. Se a conexão falhar com 'password authentication failed', " +
+        "escreva cada '%' literal da senha como '%25' (e escape também @ : / ? #)."
+    );
+  }
 }
 
 function getPool(): Pool {
@@ -42,6 +78,28 @@ export async function query<T extends QueryResultRow = QueryResultRow>(
   const pool = getPool();
   const result = await pool.query<T>(text, params);
   return result.rows;
+}
+
+/**
+ * Executa uma leitura *decorativa* (notas médias e avaliações) que enfeita a
+ * vitrine, mas da qual nada na jornada de compra depende. Se o Postgres estiver
+ * fora do ar, inacessível ou com credencial inválida, a home e as páginas de
+ * produto precisam continuar abrindo normalmente: sem este wrapper, uma falha
+ * de banco derruba a loja inteira em erro 500 — sem catálogo, sem link de
+ * produto e sem checkout — que é exatamente o sintoma de "clicar no produto e
+ * não abrir".
+ *
+ * Leituras e escritas de pedido/pagamento NUNCA usam este wrapper: ali um erro
+ * precisa estourar de verdade, jamais virar um resultado vazio silencioso que
+ * faria a loja mentir sobre o estado de uma cobrança.
+ */
+async function leituraOpcional<T>(rotulo: string, executar: () => Promise<T>, padrao: T): Promise<T> {
+  try {
+    return await executar();
+  } catch (err) {
+    console.error(`Leitura opcional "${rotulo}" falhou; a loja segue sem ela:`, err);
+    return padrao;
+  }
 }
 
 let schemaEnsured = false;
@@ -374,45 +432,57 @@ export async function getReviewForOrderProduct(
 }
 
 export async function getReviewsForProduct(productId: string, limit = 50): Promise<ReviewRecord[]> {
-  await ensureSchema();
-  return query<ReviewRecord>(
-    `SELECT * FROM reviews WHERE product_id = $1 ORDER BY created_at DESC LIMIT $2`,
-    [productId, limit]
-  );
+  return leituraOpcional(`avaliações de ${productId}`, async () => {
+    await ensureSchema();
+    return query<ReviewRecord>(
+      `SELECT * FROM reviews WHERE product_id = $1 ORDER BY created_at DESC LIMIT $2`,
+      [productId, limit]
+    );
+  }, []);
 }
 
 export async function getRatingSummary(productId: string): Promise<ProductRatingSummary> {
-  await ensureSchema();
-  const rows = await query<{ average: string | null; count: string }>(
-    `SELECT AVG(rating)::numeric(10,2) AS average, COUNT(*)::text AS count
-     FROM reviews WHERE product_id = $1`,
-    [productId]
+  return leituraOpcional(
+    `nota média de ${productId}`,
+    async () => {
+      await ensureSchema();
+      const rows = await query<{ average: string | null; count: string }>(
+        `SELECT AVG(rating)::numeric(10,2) AS average, COUNT(*)::text AS count
+         FROM reviews WHERE product_id = $1`,
+        [productId]
+      );
+      const row = rows[0];
+      return {
+        productId,
+        average: row?.average ? Number(row.average) : 0,
+        count: row?.count ? Number(row.count) : 0,
+      };
+    },
+    { productId, average: 0, count: 0 }
   );
-  const row = rows[0];
-  return {
-    productId,
-    average: row?.average ? Number(row.average) : 0,
-    count: row?.count ? Number(row.count) : 0,
-  };
 }
 
 export async function getAllRatingSummaries(): Promise<ProductRatingSummary[]> {
-  await ensureSchema();
-  const rows = await query<{ product_id: string; average: string | null; count: string }>(
-    `SELECT product_id, AVG(rating)::numeric(10,2) AS average, COUNT(*)::text AS count
-     FROM reviews GROUP BY product_id`
-  );
-  return rows.map((r) => ({
-    productId: r.product_id,
-    average: r.average ? Number(r.average) : 0,
-    count: Number(r.count),
-  }));
+  return leituraOpcional("notas médias da vitrine", async () => {
+    await ensureSchema();
+    const rows = await query<{ product_id: string; average: string | null; count: string }>(
+      `SELECT product_id, AVG(rating)::numeric(10,2) AS average, COUNT(*)::text AS count
+       FROM reviews GROUP BY product_id`
+    );
+    return rows.map((r) => ({
+      productId: r.product_id,
+      average: r.average ? Number(r.average) : 0,
+      count: Number(r.count),
+    }));
+  }, []);
 }
 
 /** Últimas avaliações de toda a loja — usado no aviso de prova social em tempo real. */
 export async function getRecentReviews(limit = 10): Promise<ReviewRecord[]> {
-  await ensureSchema();
-  return query<ReviewRecord>(`SELECT * FROM reviews ORDER BY id DESC LIMIT $1`, [limit]);
+  return leituraOpcional("avaliações recentes", async () => {
+    await ensureSchema();
+    return query<ReviewRecord>(`SELECT * FROM reviews ORDER BY id DESC LIMIT $1`, [limit]);
+  }, []);
 }
 
 // ---------------------------------------------------------------------------
