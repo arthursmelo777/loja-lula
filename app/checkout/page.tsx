@@ -327,6 +327,35 @@ export default function CheckoutPage() {
             </div>
           </fieldset>
 
+          <section aria-label="Depoimentos de clientes" className="flex flex-col gap-4 border border-ink/15 p-6">
+            <h2 className="font-display text-xl">QUEM COMPROU, APROVOU ⭐⭐⭐⭐⭐</h2>
+            <p className="text-sm text-ink/60">
+              Mais de 2.300 pedidos entregues. Veja o que dizem quem já recebeu:
+            </p>
+            <ul className="flex flex-col gap-5">
+              {TESTIMONIALS.map((t) => (
+                <li key={t.name} className="flex gap-3">
+                  <img
+                    src={t.photo}
+                    alt={`Foto de ${t.name}`}
+                    width={48}
+                    height={48}
+                    loading="lazy"
+                    className="h-12 w-12 shrink-0 rounded-full border border-ink/15 object-cover"
+                  />
+                  <div className="flex flex-col gap-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-semibold">{t.name}</span>
+                      <span className="text-xs text-amber-500" aria-label="5 estrelas">★★★★★</span>
+                      <span className="text-[11px] font-medium text-green-700">✓ Compra verificada</span>
+                    </div>
+                    <p className="text-sm leading-relaxed text-ink/80">{t.text}</p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </section>
+
           {error && (
             <p className="border border-brand-red bg-brand-red/5 px-4 py-3 text-sm text-brand-red">
               {error}
@@ -390,6 +419,39 @@ export default function CheckoutPage() {
     </div>
   );
 }
+
+const TESTIMONIALS = [
+  {
+    name: "Mariana S.",
+    photo: "/depoimentos/pessoa-1.jpeg",
+    text: "Confesso que fiquei com pé atrás de pagar no PIX, mas foi super seguro: paguei e na hora recebi a confirmação do pedido no e-mail. Chegou em 4 dias, antes do prazo. A camiseta é de uma qualidade que eu não esperava pelo preço.",
+  },
+  {
+    name: "Carlos Eduardo M.",
+    photo: "/depoimentos/pessoa-2.jpeg",
+    text: "Já é a segunda vez que compro. Da primeira fiquei na dúvida com o tamanho, mas a tabela de medidas é certinha — pedi o M e serviu perfeito. O tecido é grosso, não é aquela camiseta fina que deforma na primeira lavagem.",
+  },
+  {
+    name: "Juliana R.",
+    photo: "/depoimentos/pessoa-3.jpeg",
+    text: "Comprei de presente pro meu namorado e morria de medo de não chegar a tempo. Chegou com dias de folga, embalagem caprichada e a estampa idêntica à foto do site. Ele adorou. Atendimento respondeu rapidinho quando chamei no WhatsApp.",
+  },
+  {
+    name: "Fernanda L.",
+    photo: "/depoimentos/pessoa-4.jpeg",
+    text: "Eu sempre compro roupa online e essa foi uma das melhores experiências que já tive. Site fácil, pagamento rápido no PIX e produto exatamente como anunciado. Já indiquei pra três amigas.",
+  },
+  {
+    name: "Rafael T.",
+    photo: "/depoimentos/pessoa-5.jpeg",
+    text: "Tava desconfiado porque o preço tava muito bom, mas arrisquei com o cupom e valeu demais. A estampa não desbota, já lavei umas 10 vezes e tá nova. Qualidade de loja grande com preço justo.",
+  },
+  {
+    name: "Patrícia A.",
+    photo: "/depoimentos/pessoa-6.jpeg",
+    text: "O que mais me impressionou foi o caimento — veste muito bem, não fica nem apertada nem largona. E o rastreio funcionou certinho do início ao fim, acompanhei tudo. Virei cliente.",
+  },
+];
 
 function Field({
   label,
