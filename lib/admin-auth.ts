@@ -69,7 +69,22 @@ export async function verifyAdminSessionToken(token: string | undefined | null):
 }
 
 export function checkAdminPassword(password: string): boolean {
-  const configured = process.env.ADMIN_PASSWORD;
-  if (!configured) return false;
-  return timingSafeEqualStr(password, configured);
+  // O .trim() não é capricho: o campo de valor no painel da Vercel é uma caixa
+  // de várias linhas, e colar ali costuma levar junto um "\n" invisível. Com a
+  // comparação exata, "senha" e "senha\n" têm tamanhos diferentes e o login é
+  // recusado — com a MESMA mensagem de senha errada, o que faz a pessoa passar
+  // horas achando que digitou errado. Espaço em volta de senha nunca é
+  // intencional, então normalizamos os dois lados.
+  const configured = process.env.ADMIN_PASSWORD?.trim();
+
+  if (!configured) {
+    // Sem a variável, nenhum login é possível — e o erro genérico esconderia
+    // isso atrás de "senha incorreta". Precisa aparecer no log.
+    console.error(
+      "[admin] ADMIN_PASSWORD não está definida no ambiente. Nenhum login será aceito."
+    );
+    return false;
+  }
+
+  return timingSafeEqualStr(password.trim(), configured);
 }
