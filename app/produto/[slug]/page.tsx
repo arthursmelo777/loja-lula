@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { getProductBySlug } from "@/lib/products";
+import { getRatingSummary, getReviewsForProduct } from "@/lib/db";
 import { ProductDetail } from "@/components/ProductDetail";
+import { ProductReviews } from "@/components/ProductReviews";
 
 // Força renderização dinâmica (por requisição): esta página lê avaliações
 // (nota média, lista, contagem) direto do Postgres via getRatingSummary/
@@ -36,7 +38,22 @@ export default async function ProductPage({
   const product = getProductBySlug(slug);
   if (!product) notFound();
 
-  // As avaliações não aparecem aqui de propósito: ficam visíveis apenas no
-  // painel admin e para quem as escreveu, na própria tela do pedido.
-  return <ProductDetail product={product} />;
+  // Só as avaliações aprovadas no painel chegam aqui — a consulta já filtra
+  // por `approved`. As demais ficam visíveis apenas no admin e para quem as
+  // escreveu, na própria tela do pedido.
+  const [summary, reviews] = await Promise.all([
+    getRatingSummary(product.id),
+    getReviewsForProduct(product.id),
+  ]);
+
+  return (
+    <>
+      <ProductDetail product={product} />
+      {reviews.length > 0 && (
+        <div className="mx-auto max-w-6xl px-5 sm:px-8">
+          <ProductReviews average={summary.average} count={summary.count} reviews={reviews} />
+        </div>
+      )}
+    </>
+  );
 }

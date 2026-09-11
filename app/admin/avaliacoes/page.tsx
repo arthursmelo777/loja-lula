@@ -12,6 +12,7 @@ interface Avaliacao {
   rating: number;
   comment: string | null;
   created_at: string;
+  approved: boolean;
 }
 
 /**
@@ -25,21 +26,43 @@ export default function AdminAvaliacoesPage() {
   const [avaliacoes, setAvaliacoes] = useState<Avaliacao[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [salvando, setSalvando] = useState<number | null>(null);
+
+  async function carregar() {
+    try {
+      const res = await fetch("/api/admin/reviews", { cache: "no-store" });
+      if (!res.ok) throw new Error();
+      const data = await res.json();
+      setAvaliacoes(data.avaliacoes ?? []);
+    } catch {
+      setErro("Não foi possível carregar as avaliações.");
+    } finally {
+      setCarregando(false);
+    }
+  }
 
   useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/admin/reviews", { cache: "no-store" });
-        if (!res.ok) throw new Error();
-        const data = await res.json();
-        setAvaliacoes(data.avaliacoes ?? []);
-      } catch {
-        setErro("Não foi possível carregar as avaliações.");
-      } finally {
-        setCarregando(false);
-      }
-    })();
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- carrega a lista ao montar
+    carregar();
   }, []);
+
+  async function alternarAprovacao(id: number, aprovada: boolean) {
+    setSalvando(id);
+    try {
+      const res = await fetch(`/api/admin/reviews/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ aprovada }),
+      });
+      if (!res.ok) {
+        alert("Não foi possível salvar.");
+        return;
+      }
+      await carregar();
+    } finally {
+      setSalvando(null);
+    }
+  }
 
   const media =
     avaliacoes.length > 0
@@ -54,7 +77,8 @@ export default function AdminAvaliacoesPage() {
 
       <h1 className="mt-4 font-display text-3xl">AVALIAÇÕES</h1>
       <p className="mt-1 text-sm text-ink/60">
-        Visíveis apenas aqui e para quem escreveu. Não aparecem na loja.
+        Toda avaliação chega oculta. Aprove para que ela apareça na página do
+        produto; o resto continua visível apenas aqui e para quem escreveu.
       </p>
 
       {carregando && <p className="mt-8 text-sm text-ink/60">Carregando…</p>}
@@ -102,9 +126,26 @@ export default function AdminAvaliacoesPage() {
                     </span>
                   </div>
                   {a.comment && <p className="mt-3 text-sm text-ink/80">{a.comment}</p>}
-                  <p className="mt-3 text-xs text-ink/40">
-                    {new Date(a.created_at).toLocaleString("pt-BR")}
-                  </p>
+                  <div className="mt-4 flex flex-wrap items-center gap-3 border-t border-ink/10 pt-3">
+                    <span
+                      className={`px-2 py-1 text-[10px] font-semibold uppercase tracking-wide ${
+                        a.approved ? "bg-brand-red text-white" : "bg-ink/10 text-ink/60"
+                      }`}
+                    >
+                      {a.approved ? "Aparece na loja" : "Oculta"}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={salvando === a.id}
+                      onClick={() => alternarAprovacao(a.id, !a.approved)}
+                      className="border border-ink px-4 py-2 text-xs font-semibold uppercase tracking-wide transition-colors hover:bg-ink hover:text-cream disabled:opacity-50"
+                    >
+                      {salvando === a.id ? "Salvando…" : a.approved ? "Ocultar" : "Aprovar"}
+                    </button>
+                    <span className="ml-auto text-xs text-ink/40">
+                      {new Date(a.created_at).toLocaleString("pt-BR")}
+                    </span>
+                  </div>
                 </li>
               ))}
             </ul>

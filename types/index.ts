@@ -105,6 +105,8 @@ export interface ReviewRecord {
   rating: number;
   comment: string | null;
   created_at: string;
+  /** Só avaliações aprovadas no painel aparecem na loja. */
+  approved: boolean;
 }
 
 export interface ProductRatingSummary {

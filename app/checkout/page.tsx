@@ -327,6 +327,28 @@ export default function CheckoutPage() {
             </div>
           </fieldset>
 
+          {error && (
+            <p className="border border-brand-red bg-brand-red/5 px-4 py-3 text-sm text-brand-red">
+              {error}
+            </p>
+          )}
+
+          {/* Fecha a compra logo abaixo do cadastro e ANTES dos depoimentos:
+              quem já decidiu não precisa rolar por mais conteúdo para pagar.
+              Largura total e com o valor à vista, para não ser preciso conferir
+              o total noutra coluna antes de decidir. */}
+          <button
+            type="submit"
+            disabled={submitting}
+            className="w-full bg-brand-red px-6 py-5 text-base font-bold uppercase tracking-wide text-white shadow-[6px_6px_0_0_rgba(10,10,10,0.9)] transition-colors hover:bg-brand-red-dark disabled:opacity-60"
+          >
+            {submitting ? "Gerando PIX…" : `Finalizar compra · ${formatCents(total)}`}
+          </button>
+
+          <p className="-mt-4 text-center text-xs text-ink/50">
+            Pagamento via PIX com confirmação automática.
+          </p>
+
           <section aria-label="Depoimentos de clientes" className="flex flex-col gap-4 border border-ink/15 p-6">
             <h2 className="font-display text-xl">QUEM COMPROU, APROVOU ⭐⭐⭐⭐⭐</h2>
             <p className="text-sm text-ink/60">
@@ -356,19 +378,6 @@ export default function CheckoutPage() {
             </ul>
           </section>
 
-          {error && (
-            <p className="border border-brand-red bg-brand-red/5 px-4 py-3 text-sm text-brand-red">
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={submitting}
-            className="w-full bg-brand-red py-4 text-sm font-semibold uppercase tracking-wide text-white transition-colors hover:bg-brand-red-dark disabled:opacity-60 sm:w-auto sm:px-10"
-          >
-            {submitting ? "Gerando PIX…" : "Pagar com PIX"}
-          </button>
         </form>
 
         <aside className="h-fit border border-ink/15 p-6">

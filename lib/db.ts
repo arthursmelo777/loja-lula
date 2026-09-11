@@ -202,6 +202,11 @@ export async function ensureSchema(): Promise<void> {
       expires_at TIMESTAMPTZ
     );
 
+    -- Moderação de avaliações: toda avaliação nasce oculta e só aparece na
+    -- loja depois de aprovada no painel. Entra como ALTER porque a tabela
+    -- reviews já existe em produção.
+    ALTER TABLE reviews ADD COLUMN IF NOT EXISTS approved BOOLEAN NOT NULL DEFAULT false;
+
     -- Rastreio da entrega. Vão como ALTER porque a tabela orders já existe em
     -- produção: CREATE TABLE IF NOT EXISTS não adiciona coluna em tabela criada
     -- antes, então sem isto as colunas nunca apareceriam no banco atual.
@@ -460,8 +465,11 @@ export async function getReviewForOrderProduct(
 export async function getReviewsForProduct(productId: string, limit = 50): Promise<ReviewRecord[]> {
   return leituraOpcional(`avaliações de ${productId}`, async () => {
     await ensureSchema();
+    // Só aprovadas: a loja nunca mostra avaliação que não passou pelo painel.
     return query<ReviewRecord>(
-      `SELECT * FROM reviews WHERE product_id = $1 ORDER BY created_at DESC LIMIT $2`,
+      `SELECT * FROM reviews
+       WHERE product_id = $1 AND approved = true
+       ORDER BY created_at DESC LIMIT $2`,
       [productId, limit]
     );
   }, []);
@@ -474,7 +482,7 @@ export async function getRatingSummary(productId: string): Promise<ProductRating
       await ensureSchema();
       const rows = await query<{ average: string | null; count: string }>(
         `SELECT AVG(rating)::numeric(10,2) AS average, COUNT(*)::text AS count
-         FROM reviews WHERE product_id = $1`,
+         FROM reviews WHERE product_id = $1 AND approved = true`,
         [productId]
       );
       const row = rows[0];
@@ -493,7 +501,7 @@ export async function getAllRatingSummaries(): Promise<ProductRatingSummary[]> {
     await ensureSchema();
     const rows = await query<{ product_id: string; average: string | null; count: string }>(
       `SELECT product_id, AVG(rating)::numeric(10,2) AS average, COUNT(*)::text AS count
-       FROM reviews GROUP BY product_id`
+       FROM reviews WHERE approved = true GROUP BY product_id`
     );
     return rows.map((r) => ({
       productId: r.product_id,
@@ -705,4 +713,13 @@ export async function listarAvaliacoesAdmin(limit = 200): Promise<
      LIMIT $1`,
     [limit]
   );
+}
+
+/** Aprova ou oculta uma avaliação. Só o painel admin chama isto. */
+export async function definirAprovacaoAvaliacao(
+  reviewId: number,
+  aprovada: boolean
+): Promise<void> {
+  await ensureSchema();
+  await query(`UPDATE reviews SET approved = $2 WHERE id = $1`, [reviewId, aprovada]);
 }
