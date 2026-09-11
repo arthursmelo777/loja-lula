@@ -59,6 +59,7 @@ export default function AdminOrdersPage() {
     <div className="mx-auto max-w-6xl px-5 py-10 sm:px-8">
       <div className="flex items-center justify-between">
         <h1 className="font-display text-3xl sm:text-4xl">PEDIDOS</h1>
+      <Link href="/admin/avaliacoes" className="mt-2 inline-block text-sm underline underline-offset-2">Ver avaliações →</Link>
         <button onClick={handleLogout} className="text-sm text-ink/50 underline underline-offset-2">
           Sair
         </button>

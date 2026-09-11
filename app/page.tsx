@@ -1,7 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import { listProducts } from "@/lib/products";
-import { getAllRatingSummaries } from "@/lib/db";
 import { ProductCard } from "@/components/ProductCard";
 
 // Força renderização dinâmica (por requisição): esta página lê as notas médias
@@ -18,9 +17,6 @@ export default async function Home() {
   const products = listProducts();
   const shirts = products.filter((p) => p.category === "camiseta");
   const caps = products.filter((p) => p.category === "bone");
-
-  const summaries = await getAllRatingSummaries();
-  const ratingByProduct = new Map(summaries.map((s) => [s.productId, s]));
 
   return (
     <div>
@@ -76,7 +72,7 @@ export default async function Home() {
         </div>
         <div className="grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-4">
           {shirts.map((product) => (
-            <ProductCard key={product.id} product={product} rating={ratingByProduct.get(product.id)} />
+            <ProductCard key={product.id} product={product} />
           ))}
         </div>
       </section>
@@ -89,7 +85,7 @@ export default async function Home() {
         </div>
         <div className="grid grid-cols-2 gap-4 sm:gap-6 lg:grid-cols-4">
           {caps.map((product) => (
-            <ProductCard key={product.id} product={product} rating={ratingByProduct.get(product.id)} />
+            <ProductCard key={product.id} product={product} />
           ))}
         </div>
       </section>

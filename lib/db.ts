@@ -687,3 +687,22 @@ export async function definirEntregue(orderId: number, entregue: boolean): Promi
     [orderId]
   );
 }
+
+/** Todas as avaliações, para o painel admin. Nunca exposto publicamente. */
+export async function listarAvaliacoesAdmin(limit = 200): Promise<
+  Array<ReviewRecord & { product_name: string | null }>
+> {
+  await ensureSchema();
+  return query<ReviewRecord & { product_name: string | null }>(
+    `SELECT r.*, oi.product_name
+     FROM reviews r
+     LEFT JOIN LATERAL (
+       SELECT product_name FROM order_items
+       WHERE order_id = r.order_id AND product_id = r.product_id
+       LIMIT 1
+     ) oi ON true
+     ORDER BY r.id DESC
+     LIMIT $1`,
+    [limit]
+  );
+}
