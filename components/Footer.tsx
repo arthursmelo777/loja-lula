@@ -19,6 +19,7 @@ export function Footer() {
               <li><Link href="/#camisetas" className="hover:text-brand-red">Camisetas</Link></li>
               <li><Link href="/#bones" className="hover:text-brand-red">Bonés</Link></li>
               <li><Link href="/carrinho" className="hover:text-brand-red">Carrinho</Link></li>
+              <li><Link href="/rastreio" className="hover:text-brand-red">Rastrear pedido</Link></li>
             </ul>
           </div>
           <div>

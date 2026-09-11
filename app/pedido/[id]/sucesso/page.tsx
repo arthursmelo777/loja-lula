@@ -173,8 +173,15 @@ export default async function PedidoSucessoPage({
       )}
 
       <Link
-        href="/"
+        href="/rastreio"
         className="mt-8 block w-full bg-ink py-4 text-center text-sm font-semibold uppercase tracking-wide text-cream transition-colors hover:bg-brand-red"
+      >
+        Acompanhar meu pedido
+      </Link>
+
+      <Link
+        href="/"
+        className="mt-3 block w-full border border-ink py-4 text-center text-sm font-semibold uppercase tracking-wide transition-colors hover:bg-ink hover:text-cream"
       >
         Voltar à loja
       </Link>

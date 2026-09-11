@@ -201,6 +201,14 @@ export async function ensureSchema(): Promise<void> {
       expires_at TIMESTAMPTZ
     );
 
+    -- Rastreio da entrega. Vão como ALTER porque a tabela orders já existe em
+    -- produção: CREATE TABLE IF NOT EXISTS não adiciona coluna em tabela criada
+    -- antes, então sem isto as colunas nunca apareceriam no banco atual.
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS tracking_code TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS carrier TEXT;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS shipped_at TIMESTAMPTZ;
+    ALTER TABLE orders ADD COLUMN IF NOT EXISTS delivered_at TIMESTAMPTZ;
+
     CREATE INDEX IF NOT EXISTS idx_orders_transaction_hash ON orders (transaction_hash);
     CREATE INDEX IF NOT EXISTS idx_orders_payment_status ON orders (payment_status);
     CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items (order_id);
@@ -566,4 +574,108 @@ export async function redeemCoupon(code: string, orderId: number): Promise<Coupo
     [code.trim().toUpperCase(), orderId]
   );
   return rows[0];
+}
+
+// ---------------------------------------------------------------------------
+// Rastreio da entrega
+// ---------------------------------------------------------------------------
+
+export interface RastreioPublico {
+  id: number;
+  status: OrderStatus;
+  total: number;
+  createdAt: string;
+  trackingCode: string | null;
+  carrier: string | null;
+  shippedAt: string | null;
+  deliveredAt: string | null;
+  /** Só cidade/UF — endereço completo nunca sai numa página pública. */
+  cidade: string;
+  estado: string;
+  /** Primeiro nome apenas, para o cliente reconhecer o pedido sem expor o resto. */
+  primeiroNome: string;
+  itens: Array<{ nome: string; variante: string | null; quantidade: number }>;
+}
+
+/**
+ * Busca um pedido para a página pública de rastreio.
+ *
+ * Exige número do pedido E CPF: só o CPF não basta. CPF circula com facilidade
+ * no Brasil, e uma consulta por CPF sozinho deixaria qualquer pessoa listar os
+ * pedidos de alguém. Exigir os dois não pesa para quem comprou (tem ambos) e
+ * elimina a enumeração — trocar o número na URL não leva a lugar nenhum.
+ *
+ * Devolve apenas o necessário para rastrear: nunca endereço completo, e-mail,
+ * telefone ou dados de pagamento.
+ */
+export async function buscarPedidoParaRastreio(
+  orderId: number,
+  documento: string
+): Promise<RastreioPublico | null> {
+  await ensureSchema();
+  const digitos = documento.replace(/\D/g, "");
+  if (!Number.isInteger(orderId) || orderId <= 0 || digitos.length !== 11) return null;
+
+  const rows = await query<OrderRecord>(
+    // A comparação ignora a formatação do CPF gravada no pedido.
+    `SELECT * FROM orders
+     WHERE id = $1 AND regexp_replace(customer_document, '\\D', '', 'g') = $2`,
+    [orderId, digitos]
+  );
+  const order = rows[0];
+  if (!order) return null;
+
+  const itens = await getOrderItems(order.id);
+
+  return {
+    id: order.id,
+    status: order.payment_status,
+    total: order.total,
+    createdAt: order.created_at,
+    trackingCode: order.tracking_code,
+    carrier: order.carrier,
+    shippedAt: order.shipped_at,
+    deliveredAt: order.delivered_at,
+    cidade: order.city,
+    estado: order.state,
+    primeiroNome: order.customer_name.trim().split(/\s+/)[0] ?? "",
+    itens: itens.map((i) => ({
+      nome: i.product_name,
+      variante: i.variant,
+      quantidade: i.quantity,
+    })),
+  };
+}
+
+/** Grava (ou limpa) o rastreio de um pedido. Usado pelo painel admin. */
+export async function definirRastreio(
+  orderId: number,
+  trackingCode: string | null,
+  carrier: string | null
+): Promise<void> {
+  await ensureSchema();
+  await query(
+    // Os casts para ::text são obrigatórios: dentro de `CASE WHEN $2 IS NULL`
+    // o Postgres não tem como inferir o tipo do parâmetro e recusa a query com
+    // "could not determine data type of parameter".
+    `UPDATE orders
+     SET tracking_code = $2::text,
+         carrier = $3::text,
+         -- A data de postagem é gravada junto com o primeiro código, e mantida
+         -- se o código for só corrigido depois.
+         shipped_at = CASE WHEN $2::text IS NULL THEN NULL ELSE COALESCE(shipped_at, now()) END,
+         updated_at = now()
+     WHERE id = $1`,
+    [orderId, trackingCode, carrier]
+  );
+}
+
+/** Marca ou desmarca a entrega como concluída. */
+export async function definirEntregue(orderId: number, entregue: boolean): Promise<void> {
+  await ensureSchema();
+  await query(
+    `UPDATE orders SET delivered_at = ${entregue ? "COALESCE(delivered_at, now())" : "NULL"}, updated_at = now()
+     WHERE id = $1`,
+    [orderId]
+  );
 }

@@ -78,6 +78,11 @@ export interface OrderRecord {
   client_user_agent: string | null;
   pix_qr_code: string | null;
   pix_qr_code_text: string | null;
+  /** Rastreio da entrega — preenchido pelo painel admin ao postar. */
+  tracking_code: string | null;
+  carrier: string | null;
+  shipped_at: string | null;
+  delivered_at: string | null;
   raw_gateway_response: unknown;
   created_at: string;
   updated_at: string;

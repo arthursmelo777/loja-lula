@@ -16,6 +16,10 @@ export default function AdminOrderDetailPage({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [refunding, setRefunding] = useState(false);
+  const [trackingCode, setTrackingCode] = useState("");
+  const [carrier, setCarrier] = useState("");
+  const [savingTracking, setSavingTracking] = useState(false);
+  const [trackingSaved, setTrackingSaved] = useState(false);
 
   async function load() {
     setLoading(true);
@@ -26,6 +30,8 @@ export default function AdminOrderDetailPage({
       const data = await res.json();
       setOrder(data.order);
       setItems(data.items ?? []);
+      setTrackingCode(data.order?.tracking_code ?? "");
+      setCarrier(data.order?.carrier ?? "");
     } catch {
       setError("Pedido não encontrado.");
     } finally {
@@ -54,6 +60,37 @@ export default function AdminOrderDetailPage({
     } finally {
       setRefunding(false);
     }
+  }
+
+  async function salvarRastreio() {
+    setSavingTracking(true);
+    setTrackingSaved(false);
+    try {
+      const res = await fetch(`/api/admin/orders/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ trackingCode, carrier }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.error || "Falha ao salvar o rastreio.");
+        return;
+      }
+      setTrackingSaved(true);
+      setTimeout(() => setTrackingSaved(false), 2500);
+      await load();
+    } finally {
+      setSavingTracking(false);
+    }
+  }
+
+  async function alternarEntregue(entregue: boolean) {
+    await fetch(`/api/admin/orders/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entregue }),
+    });
+    await load();
   }
 
   if (loading) return <p className="p-10 text-sm text-ink/60">Carregando…</p>;
@@ -127,6 +164,53 @@ export default function AdminOrderDetailPage({
         {(order.utm_source || order.utm_medium || order.utm_campaign) && (
           <p className="mt-2">
             UTM: {order.utm_source} / {order.utm_medium} / {order.utm_campaign}
+          </p>
+        )}
+      </div>
+
+      <div className="mt-6 border border-ink/15 p-6">
+        <h2 className="mb-1 font-display text-lg">ENTREGA</h2>
+        <p className="mb-4 text-xs text-ink/50">
+          O que você preencher aqui aparece para o cliente em /rastreio.
+        </p>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <input
+            value={trackingCode}
+            onChange={(e) => setTrackingCode(e.target.value.toUpperCase())}
+            placeholder="Código de rastreio"
+            className="flex-1 border border-ink/20 bg-white px-3 py-2.5 text-sm outline-none focus:border-ink"
+          />
+          <input
+            value={carrier}
+            onChange={(e) => setCarrier(e.target.value)}
+            placeholder="Transportadora (ex.: Correios)"
+            className="flex-1 border border-ink/20 bg-white px-3 py-2.5 text-sm outline-none focus:border-ink"
+          />
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <button
+            onClick={salvarRastreio}
+            disabled={savingTracking}
+            className="bg-ink px-6 py-2.5 text-xs font-semibold uppercase tracking-wide text-cream transition-colors hover:bg-brand-red disabled:opacity-60"
+          >
+            {savingTracking ? "Salvando…" : trackingSaved ? "Salvo!" : "Salvar rastreio"}
+          </button>
+          <label className="flex items-center gap-2 text-sm text-ink/70">
+            <input
+              type="checkbox"
+              checked={Boolean(order.delivered_at)}
+              onChange={(e) => alternarEntregue(e.target.checked)}
+              className="h-4 w-4"
+            />
+            Marcar como entregue
+          </label>
+        </div>
+        {order.shipped_at && (
+          <p className="mt-3 text-xs text-ink/50">
+            Postado em {new Date(order.shipped_at).toLocaleDateString("pt-BR")}
+            {order.delivered_at
+              ? ` · Entregue em ${new Date(order.delivered_at).toLocaleDateString("pt-BR")}`
+              : ""}
           </p>
         )}
       </div>
