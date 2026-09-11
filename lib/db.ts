@@ -361,11 +361,26 @@ export async function updateOrderStatus(
   status: OrderStatus
 ): Promise<{ changedToPaid: boolean }> {
   await ensureSchema();
-  const before = await query<{ payment_status: OrderStatus }>(
-    `SELECT payment_status FROM orders WHERE id = $1`,
-    [orderId]
-  );
-  const wasPaid = before[0]?.payment_status === "paid";
+
+  if (status === "paid") {
+    // Atômico de propósito. O webhook da processadora e o polling da tela de
+    // pagamento podem confirmar o MESMO pedido ao mesmo tempo. Com um SELECT
+    // seguido de UPDATE, os dois liam "ainda não pago", os dois recebiam
+    // changedToPaid = true e o evento Purchase era enviado duas vezes — venda
+    // duplicada no Gerenciador de Anúncios, inflando o ROAS com faturamento
+    // que não existiu.
+    //
+    // Numa única instrução, o primeiro que chegar trava a linha e grava; o
+    // segundo espera o lock, reavalia o WHERE contra o valor já gravado, não
+    // casa e volta sem linha nenhuma. Exatamente um caller recebe `true`.
+    const linhasAfetadas = await query<{ id: string }>(
+      `UPDATE orders SET payment_status = 'paid', updated_at = now()
+       WHERE id = $1 AND payment_status <> 'paid'
+       RETURNING id`,
+      [orderId]
+    );
+    return { changedToPaid: linhasAfetadas.length > 0 };
+  }
 
   await query(`UPDATE orders SET payment_status = $2, updated_at = now() WHERE id = $1`, [orderId, status]);
   // Pedido cancelado (pagamento não concluído) devolve o cupom usado nele, se houver,
@@ -377,7 +392,9 @@ export async function updateOrderStatus(
     );
   }
 
-  return { changedToPaid: status === "paid" && !wasPaid };
+  // Qualquer status diferente de "paid" nunca é uma confirmação de pagamento;
+  // o caso "paid" já retornou acima.
+  return { changedToPaid: false };
 }
 
 export async function listOrders(filter?: OrderStatus): Promise<OrderRecord[]> {
