@@ -18,6 +18,13 @@ interface PedidoRastreio {
   estado: string;
   primeiroNome: string;
   itens: Array<{ nome: string; variante: string | null; quantidade: number }>;
+  previsao: {
+    regiao: string;
+    postagemPrevista: string;
+    entregaMinima: string;
+    entregaMaxima: string;
+    baseadaEmPostagemReal: boolean;
+  } | null;
 }
 
 /** Etapas na ordem em que acontecem. `alcancada` é calculada a partir do pedido. */
@@ -30,28 +37,48 @@ function montarEtapas(p: PedidoRastreio) {
       titulo: "Pedido recebido",
       detalhe: formatarData(p.createdAt),
       alcancada: true,
+      previsto: false,
     },
     {
       titulo: "Pagamento confirmado",
       detalhe: pago ? "Recebemos seu PIX" : "Aguardando o pagamento",
       alcancada: pago,
+      previsto: false,
     },
     {
       titulo: "Em preparação",
       detalhe: pago && !enviado ? "Separando e embalando seu pedido" : "",
       alcancada: pago,
+      previsto: false,
     },
     {
       titulo: "Enviado",
-      detalhe: enviado ? formatarData(p.shippedAt) : "",
+      detalhe: enviado
+        ? formatarData(p.shippedAt)
+        : p.previsao
+          ? `Postagem prevista para ${formatarDataCurta(p.previsao.postagemPrevista)}`
+          : "",
       alcancada: enviado,
+      previsto: !enviado && Boolean(p.previsao),
     },
     {
       titulo: "Entregue",
-      detalhe: entregue ? formatarData(p.deliveredAt) : "",
+      detalhe: entregue
+        ? formatarData(p.deliveredAt)
+        : p.previsao
+          ? `Entre ${formatarDataCurta(p.previsao.entregaMinima)} e ${formatarDataCurta(p.previsao.entregaMaxima)}`
+          : "",
       alcancada: entregue,
+      previsto: !entregue && Boolean(p.previsao),
     },
   ];
+}
+
+function formatarDataCurta(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
 }
 
 function formatarData(iso: string | null): string {
@@ -178,6 +205,28 @@ export function RastreioView({ whatsapp }: { whatsapp: string | null }) {
             </p>
           )}
 
+          {/* Resumo da previsão — deixa explícito que é estimativa. */}
+          {pedido.previsao && !pedido.deliveredAt && (
+            <div className="mt-6 border border-ink/15 bg-white/50 p-5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-ink/50">
+                Previsão de entrega
+              </p>
+              <p className="mt-1 font-display text-2xl">
+                {formatarDataCurta(pedido.previsao.entregaMinima)} a{" "}
+                {formatarDataCurta(pedido.previsao.entregaMaxima)}
+              </p>
+              <p className="mt-2 text-xs text-ink/50">
+                Estimativa em dias úteis para a região {pedido.previsao.regiao}
+                {pedido.previsao.baseadaEmPostagemReal
+                  ? ", contada a partir da postagem."
+                  : ", contada a partir da confirmação do pagamento."}{" "}
+                {pedido.trackingCode
+                  ? "Acompanhe a posição real pelo código de rastreio abaixo."
+                  : "A data exata passa a valer quando o código de rastreio for emitido."}
+              </p>
+            </div>
+          )}
+
           {/* Linha do tempo */}
           <ol className="mt-8 flex flex-col">
             {montarEtapas(pedido).map((etapa, i, todas) => (
@@ -208,8 +257,15 @@ export function RastreioView({ whatsapp }: { whatsapp: string | null }) {
                     />
                   )}
                 </div>
-                <div className={`pb-8 ${etapa.alcancada ? "" : "opacity-45"}`}>
-                  <p className="font-semibold leading-5">{etapa.titulo}</p>
+                <div className={`pb-8 ${etapa.alcancada ? "" : "opacity-60"}`}>
+                  <p className="flex flex-wrap items-center gap-2 font-semibold leading-5">
+                    {etapa.titulo}
+                    {etapa.previsto && (
+                      <span className="border border-ink/25 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink/50">
+                        Previsão
+                      </span>
+                    )}
+                  </p>
                   {etapa.detalhe && <p className="mt-0.5 text-sm text-ink/60">{etapa.detalhe}</p>}
                 </div>
               </li>

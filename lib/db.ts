@@ -7,6 +7,7 @@ import type {
   ProductRatingSummary,
   CouponRecord,
 } from "@/types";
+import { estimarEntrega, type PrevisaoEntrega } from "./entrega";
 
 declare global {
   var __pgPool: Pool | undefined;
@@ -592,6 +593,8 @@ export interface RastreioPublico {
   /** Só cidade/UF — endereço completo nunca sai numa página pública. */
   cidade: string;
   estado: string;
+  /** Datas projetadas a partir do destino. Previsão, não rastreamento. */
+  previsao: PrevisaoEntrega | null;
   /** Primeiro nome apenas, para o cliente reconhecer o pedido sem expor o resto. */
   primeiroNome: string;
   itens: Array<{ nome: string; variante: string | null; quantidade: number }>;
@@ -638,6 +641,11 @@ export async function buscarPedidoParaRastreio(
     deliveredAt: order.delivered_at,
     cidade: order.city,
     estado: order.state,
+    // Só faz sentido projetar entrega depois que o pagamento entrou.
+    previsao:
+      order.payment_status === "paid"
+        ? estimarEntrega(order.state, order.updated_at ?? order.created_at, order.shipped_at)
+        : null,
     primeiroNome: order.customer_name.trim().split(/\s+/)[0] ?? "",
     itens: itens.map((i) => ({
       nome: i.product_name,
