@@ -1,5 +1,6 @@
 import "server-only";
 import type { OrderStatus, UtmData } from "@/types";
+import { criarProcessadoraDotfy } from "./processadoras/dotfy";
 
 /**
  * Encaixe da processadora de pagamento.
@@ -61,14 +62,54 @@ export interface CobrancaPix {
   raw: unknown;
 }
 
+/** Dados de quem efetivamente pagou, quando a processadora informa. */
+export interface Pagador {
+  nome: string | null;
+  email: string | null;
+  telefone: string | null;
+  documento: string | null;
+}
+
+export interface WebhookInterpretado {
+  idTransacao: string | null;
+  status: OrderStatus | null;
+  /** Nome do evento, só para log/diagnóstico. */
+  evento: string | null;
+  /** Quem pagou — usado para conferir contra o CPF do pedido. */
+  pagador: Pagador | null;
+}
+
 export interface ProcessadoraPagamento {
   /** Nome legível, usado em mensagens de erro e log. */
   readonly nome: string;
   criarCobrancaPix(dados: DadosCobrancaPix): Promise<CobrancaPix>;
-  consultarTransacao(idTransacao: string): Promise<{ status: OrderStatus; raw: unknown }>;
+  /** Lê a cobrança na processadora. Serve tanto para saber o status quanto
+   *  para buscar o código PIX de uma cobrança que ainda não o tinha. */
+  consultarTransacao(idTransacao: string): Promise<CobrancaPix>;
   reembolsar(idTransacao: string, valor: number): Promise<void>;
-  /** Lê o corpo de um webhook e diz de qual transação e status ele fala. */
-  interpretarWebhook(corpo: unknown): { idTransacao: string | null; status: OrderStatus | null };
+  /**
+   * Valida a autenticidade do webhook e diz de qual transação ele fala.
+   *
+   * Recebe o corpo CRU (string), não o JSON já parseado: a assinatura é
+   * calculada sobre os bytes exatos que chegaram, e qualquer reserialização
+   * muda o resultado. Lança AssinaturaWebhookInvalida quando a assinatura
+   * não confere.
+   */
+  interpretarWebhook(corpoBruto: string, cabecalhos: Headers): WebhookInterpretado;
+}
+
+/**
+ * Webhook recusado: assinatura ausente, malformada, vencida ou que não bate.
+ *
+ * Tratado como caso distinto porque a resposta HTTP correta é 401 — e porque
+ * um pico disso no log significa que alguém está tentando forjar confirmação
+ * de pagamento, o que merece atenção, não um "erro genérico".
+ */
+export class AssinaturaWebhookInvalida extends Error {
+  constructor(motivo: string) {
+    super(`Assinatura de webhook inválida: ${motivo}`);
+    this.name = "AssinaturaWebhookInvalida";
+  }
 }
 
 /**
@@ -92,12 +133,15 @@ export class ProcessadoraNaoConfigurada extends Error {
 /**
  * Devolve a processadora ativa.
  *
- * A integração anterior (InvictusPay) foi removida. Enquanto nenhuma nova for
- * registrada aqui, os pedidos continuam sendo criados e gravados no banco — o
- * que falha, com mensagem explícita, é só a geração da cobrança. Assim nada de
- * histórico se perde na troca, e a loja segue navegável.
+ * Trocar de processadora é trocar o que esta função retorna. Se as credenciais
+ * não estiverem no ambiente, seguimos sem processadora: os pedidos continuam
+ * sendo criados e gravados no banco, e só a geração da cobrança falha, com
+ * mensagem explícita. Assim nada de histórico se perde numa troca.
  */
 export function getProcessadora(): ProcessadoraPagamento {
+  if (process.env.DOTFY_API_KEY && process.env.DOTFY_WEBHOOK_SECRET) {
+    return criarProcessadoraDotfy();
+  }
   throw new ProcessadoraNaoConfigurada();
 }
 

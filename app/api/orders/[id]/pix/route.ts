@@ -65,6 +65,44 @@ export async function POST(request: NextRequest, { params }: { params: Promise<{
     const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? request.nextUrl.origin;
     const processadora = getProcessadora();
 
+    // Já existe cobrança vinculada a este pedido, mas sem código PIX. Isso
+    // acontece quando a processadora aceitou a cobrança e ficou processando em
+    // fila. Consultamos a cobrança existente ANTES de criar outra — senão cada
+    // clique em "Gerar código PIX" abriria uma cobrança nova para o mesmo
+    // pedido, e o comprador acabaria com vários QR Codes válidos ao mesmo
+    // tempo, podendo pagar duas vezes.
+    if (order.transaction_hash) {
+      try {
+        const existente = await processadora.consultarTransacao(order.transaction_hash);
+        if (existente.qrCodeTexto) {
+          await attachTransaction(
+            order.id,
+            existente.idTransacao || order.transaction_hash,
+            existente.qrCodeImagem,
+            existente.qrCodeTexto,
+            existente.raw
+          );
+          return NextResponse.json({
+            qrCodeText: existente.qrCodeTexto,
+            qrCodeImage:
+              existente.qrCodeImagem ?? (await generatePixQrCodeImage(existente.qrCodeTexto)),
+          });
+        }
+        // Sem código e ainda viva: continua na fila, não adianta criar outra.
+        if (existente.status === "pending") {
+          return NextResponse.json(
+            { error: "A cobrança ainda está sendo processada. Aguarde alguns segundos e tente de novo." },
+            { status: 409 }
+          );
+        }
+        // Cobrança morta (expirada/cancelada): seguimos e criamos uma nova.
+      } catch (err) {
+        console.warn(`Não foi possível consultar a cobrança ${order.transaction_hash}:`, err);
+        // Segue para criar uma nova — melhor uma cobrança a mais que um
+        // comprador sem meio de pagar.
+      }
+    }
+
     const cobranca = await processadora.criarCobrancaPix({
       valor: order.total,
       cliente: {
