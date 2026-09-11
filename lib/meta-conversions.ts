@@ -34,7 +34,20 @@ export interface PurchaseEventInput {
 export async function sendMetaPurchaseEvent(input: PurchaseEventInput): Promise<void> {
   const pixelId = process.env.NEXT_PUBLIC_META_PIXEL_ID;
   const accessToken = process.env.META_CONVERSIONS_API_TOKEN;
-  if (!pixelId || !accessToken) return; // Meta não configurado — no-op silencioso
+  if (!pixelId || !accessToken) {
+    // Nunca em silêncio. Faltar o token da Conversions API não quebra nada
+    // visível — o pagamento segue, a tela abre — mas a venda deixa de chegar
+    // ao Meta, o algoritmo otimiza com dado incompleto e o ROAS aparece pior
+    // do que é. Um problema invisível desses só se descobre auditando, então
+    // ele precisa gritar no log.
+    console.warn(
+      "[meta] Purchase NÃO enviado: " +
+        (!pixelId ? "NEXT_PUBLIC_META_PIXEL_ID ausente. " : "") +
+        (!accessToken ? "META_CONVERSIONS_API_TOKEN ausente. " : "") +
+        "A venda não será contabilizada na Conversions API."
+    );
+    return;
+  }
 
   // Só e-mail e telefone vão com hash; fbp, fbc, IP e user-agent são enviados
   // crus, conforme a especificação da Conversions API.
