@@ -28,7 +28,9 @@ export async function GET() {
       DOTFY_API_URL: definida("DOTFY_API_URL"),
     },
     meta: {
-      NEXT_PUBLIC_META_PIXEL_ID: definida("NEXT_PUBLIC_META_PIXEL_ID"),
+      // Valor, não booleano: o pixel ID é público (vai no HTML de toda página),
+      // e saber QUAL está valendo é o que diagnostica uma troca que não pegou.
+      NEXT_PUBLIC_META_PIXEL_ID: process.env.NEXT_PUBLIC_META_PIXEL_ID ?? null,
       // A que faltava: sem ela o Purchase server-side nunca sai.
       META_CONVERSIONS_API_TOKEN: definida("META_CONVERSIONS_API_TOKEN"),
     },
