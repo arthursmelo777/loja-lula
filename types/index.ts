@@ -117,6 +117,8 @@ export interface ProductRatingSummary {
 
 export interface CouponRecord {
   id: number;
+  /** Cupom de campanha: vale para qualquer pessoa e não se esgota no uso. */
+  reusable?: boolean;
   code: string;
   discount_percent: number;
   source_order_id: number;

@@ -8,6 +8,7 @@ import { PRODUCTS } from "@/lib/products";
 import { formatCents } from "@/lib/format";
 import { maskCPF, maskCEP, maskPhone, onlyDigits } from "@/lib/masks";
 import { getStoredFbc, getStoredUtm } from "@/lib/utm";
+import { getCupomSalvo } from "@/lib/cupons";
 import { trackMetaEvent } from "@/lib/meta-pixel-client";
 
 interface FormState {
@@ -47,7 +48,10 @@ export default function CheckoutPage() {
   const [cepLoading, setCepLoading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [couponCode, setCouponCode] = useState("");
+  // Inicia já com o cupom que veio da página de campanha: sem isso a pessoa
+  // resgataria o código lá e chegaria aqui com o campo vazio, tendo que colar
+  // de memória — e a maioria não cola.
+  const [couponCode, setCouponCode] = useState(() => getCupomSalvo() ?? "");
   const [couponStatus, setCouponStatus] = useState<CouponStatus>("idle");
   const [couponDiscountPercent, setCouponDiscountPercent] = useState(0);
   // Evita a corrida: limpar o carrinho após um pedido bem-sucedido deixa
@@ -86,6 +90,7 @@ export default function CheckoutPage() {
       router.replace("/carrinho");
     }
   }, [items, router]);
+
 
   useEffect(() => {
     // O carrinho hidrata do localStorage de forma assíncrona, então `items`

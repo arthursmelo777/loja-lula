@@ -202,6 +202,18 @@ export async function ensureSchema(): Promise<void> {
       expires_at TIMESTAMPTZ
     );
 
+    -- Cupom de campanha (presell): vale para qualquer pessoa e não se esgota
+    -- no primeiro uso, diferente do cupom de recompensa por avaliação. Por
+    -- isso source_order_id deixa de ser obrigatório — um cupom de campanha
+    -- não nasce de pedido nenhum.
+    ALTER TABLE coupons ADD COLUMN IF NOT EXISTS reusable BOOLEAN NOT NULL DEFAULT false;
+    ALTER TABLE coupons ALTER COLUMN source_order_id DROP NOT NULL;
+
+    -- Semeado aqui para existir sempre, em qualquer ambiente, sem passo manual.
+    INSERT INTO coupons (code, discount_percent, source_order_id, reusable)
+    VALUES ('BEMVINDO5', 5, NULL, true)
+    ON CONFLICT (code) DO NOTHING;
+
     -- Moderação de avaliações: toda avaliação nasce oculta e só aparece na
     -- loja depois de aprovada no painel. Entra como ALTER porque a tabela
     -- reviews já existe em produção.
@@ -563,8 +575,12 @@ export async function getOrCreateCouponForOrder(orderId: number): Promise<Coupon
 export async function findValidCoupon(code: string): Promise<CouponRecord | undefined> {
   await ensureSchema();
   const rows = await query<CouponRecord>(
+    // Um cupom reutilizável segue válido mesmo depois de usado; o de uso único
+    // só vale enquanto não estiver atrelado a um pedido.
     `SELECT * FROM coupons
-     WHERE code = $1 AND used_order_id IS NULL AND (expires_at IS NULL OR expires_at > now())`,
+     WHERE code = $1
+       AND (reusable = true OR used_order_id IS NULL)
+       AND (expires_at IS NULL OR expires_at > now())`,
     [code.trim().toUpperCase()]
   );
   return rows[0];
@@ -576,6 +592,14 @@ export async function findValidCoupon(code: string): Promise<CouponRecord | unde
  */
 export async function redeemCoupon(code: string, orderId: number): Promise<CouponRecord | undefined> {
   await ensureSchema();
+  // Cupom reutilizável não é consumido: marcá-lo como usado tiraria o desconto
+  // de todo mundo que viesse depois pela mesma campanha.
+  const reutilizavel = await query<CouponRecord>(
+    `SELECT * FROM coupons WHERE code = $1 AND reusable = true`,
+    [code.trim().toUpperCase()]
+  );
+  if (reutilizavel[0]) return reutilizavel[0];
+
   const rows = await query<CouponRecord>(
     `UPDATE coupons SET used_order_id = $2, used_at = now()
      WHERE code = $1 AND used_order_id IS NULL AND (expires_at IS NULL OR expires_at > now())
